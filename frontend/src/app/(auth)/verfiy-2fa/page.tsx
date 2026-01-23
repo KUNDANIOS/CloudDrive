@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/Button';
 import { authApi } from '@/lib/api/auth';
 import { useAuthStore } from '@/lib/store/authStore';
 import { Shield } from 'lucide-react';
-import Cookies from '../../../../node_modules/@types/js-cookie';
+import Cookies from 'js-cookie';
+
 
 export default function Verify2FAPage() {
   const router = useRouter();
