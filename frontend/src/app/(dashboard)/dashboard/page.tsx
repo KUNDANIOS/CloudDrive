@@ -5,7 +5,7 @@ import { Breadcrumb } from '@/components/dashboard/Breadcrumb';
 import { FileGrid } from '@/components/dashboard/FileGrid';
 import { filesApi } from '@/lib/api/files';
 import { foldersApi } from '@/lib/api/folders';
-import { FileItem } from '@/lib/types';
+import { FileItem, Folder } from '@/lib/types';
 import { useFileStore } from '@/lib/store/fileStore';
 import { FolderPlus, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -59,7 +59,7 @@ export default function DashboardPage() {
   const handleFileOpen = async (file: FileItem) => {
     if (file.type === 'folder') {
       setCurrentFolderId(file.id);
-      setCurrentFolder(file);
+      setCurrentFolder(file as Folder);
     } else {
       try {
         const response = await filesApi.downloadFile(file.id);
@@ -140,7 +140,6 @@ export default function DashboardPage() {
       {/* Error Display */}
       {error && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
               Error
@@ -151,8 +150,7 @@ export default function DashboardPage() {
           </div>
           <button
             onClick={() => setError(null)}
-            className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 text-lg leading-none"
-            aria-label="Dismiss error"
+            className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
           >
             ✕
           </button>
