@@ -7,70 +7,34 @@ import { logActivity } from "../utils/logActivity.js";
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-/* UPLOAD FILE */
-router.post("/upload", protect, upload.single("file"), async (req, res) => {
+/* GET STORAGE USAGE - MUST BE BEFORE /:id */
+router.get("/storage", protect, async (req, res) => {
   try {
-    const file = req.file;
-    if (!file) return res.status(400).json({ message: "No file uploaded" });
-
     const userId = req.user.id;
-    const folderId = req.body.parentId || null; // Get folder ID from request body
-    const filePath = `${userId}/${Date.now()}-${file.originalname}`;
 
-    console.log('Uploading file:', file.originalname, 'to folder:', folderId); // Debug
-
-    const { error: uploadError } = await supabase.storage
+    // Get all non-deleted files for this user
+    const { data: files, error } = await supabase
       .from("files")
-      .upload(filePath, file.buffer, { contentType: file.mimetype });
-
-    if (uploadError) throw uploadError;
-
-    const { data, error } = await supabase
-      .from("files")
-      .insert({
-        name: file.originalname,
-        owner_id: userId,
-        folder_id: folderId, // Use the folderId from request
-        mime_type: file.mimetype,
-        size_bytes: file.size,
-        storage_key: filePath,
-      })
-      .select()
-      .single();
+      .select("size_bytes")
+      .eq("owner_id", userId)
+      .eq("is_deleted", false);
 
     if (error) throw error;
 
-    // Transform to match frontend format
-    const transformedFile = {
-      id: data.id,
-      name: data.name,
-      type: 'file',
-      size: data.size_bytes,
-      mimeType: data.mime_type,
-      parentId: data.folder_id,
-      path: `/${data.name}`,
-      isStarred: data.is_starred || false,
-      isTrashed: false,
-      owner: {
-        id: req.user.id,
-        name: req.user.name || "You",
-        email: req.user.email,
-      },
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
-    };
+    // Calculate total storage used
+    const totalBytes = (files || []).reduce((sum, file) => sum + (file.size_bytes || 0), 0);
+    
+    // 5GB limit in bytes
+    const limitBytes = 5 * 1024 * 1024 * 1024; // 5GB
 
-    await logActivity({
-      userId,
-      action: "file_uploaded",
-      resourceType: "file",
-      resourceId: data.id,
-      metadata: { name: data.name, folderId },
+    console.log(`📊 Storage for user ${userId}: ${totalBytes} / ${limitBytes} bytes`);
+
+    res.json({
+      used: totalBytes,
+      limit: limitBytes
     });
-
-    res.json({ file: transformedFile });
   } catch (err) {
-    console.error("Upload error:", err);
+    console.error("Get storage error:", err);
     res.status(500).json({ message: err.message });
   }
 });
@@ -152,43 +116,6 @@ router.get("/recent", protect, async (req, res) => {
   }
 });
 
-/* GET TRASHED FILES - MUST BE BEFORE /:id */
-router.get("/trash", protect, async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from("files")
-      .select("*")
-      .eq("owner_id", req.user.id)
-      .eq("is_deleted", true);
-
-    if (error) throw error;
-
-    const files = (data || []).map(file => ({
-      id: file.id,
-      name: file.name,
-      type: 'file',
-      size: file.size_bytes,
-      mimeType: file.mime_type,
-      parentId: file.folder_id,
-      path: `/${file.name}`,
-      isStarred: file.is_starred || false,
-      isTrashed: true,
-      owner: {
-        id: req.user.id,
-        name: req.user.name || "You",
-        email: req.user.email,
-      },
-      createdAt: file.created_at,
-      updatedAt: file.updated_at,
-    }));
-
-    res.json({ files });
-  } catch (err) {
-    console.error("Get trash files error:", err);
-    res.status(500).json({ message: err.message });
-  }
-});
-
 /* SEARCH FILES - MUST BE BEFORE /:id */
 router.get("/search", protect, async (req, res) => {
   try {
@@ -226,6 +153,73 @@ router.get("/search", protect, async (req, res) => {
     res.json({ files });
   } catch (err) {
     console.error("Search files error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/* UPLOAD FILE */
+router.post("/upload", protect, upload.single("file"), async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) return res.status(400).json({ message: "No file uploaded" });
+
+    const userId = req.user.id;
+    const folderId = req.body.parentId || null;
+    const filePath = `${userId}/${Date.now()}-${file.originalname}`;
+
+    console.log('Uploading file:', file.originalname, 'to folder:', folderId);
+
+    const { error: uploadError } = await supabase.storage
+      .from("files")
+      .upload(filePath, file.buffer, { contentType: file.mimetype });
+
+    if (uploadError) throw uploadError;
+
+    const { data, error } = await supabase
+      .from("files")
+      .insert({
+        name: file.originalname,
+        owner_id: userId,
+        folder_id: folderId,
+        mime_type: file.mimetype,
+        size_bytes: file.size,
+        storage_key: filePath,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    const transformedFile = {
+      id: data.id,
+      name: data.name,
+      type: 'file',
+      size: data.size_bytes,
+      mimeType: data.mime_type,
+      parentId: data.folder_id,
+      path: `/${data.name}`,
+      isStarred: data.is_starred || false,
+      isTrashed: false,
+      owner: {
+        id: req.user.id,
+        name: req.user.name || "You",
+        email: req.user.email,
+      },
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
+
+    await logActivity({
+      userId,
+      action: "file_uploaded",
+      resourceType: "file",
+      resourceId: data.id,
+      metadata: { name: data.name, folderId },
+    });
+
+    res.json({ file: transformedFile });
+  } catch (err) {
+    console.error("Upload error:", err);
     res.status(500).json({ message: err.message });
   }
 });
@@ -421,74 +415,67 @@ router.patch("/:id/move", protect, async (req, res) => {
   }
 });
 
-/* DELETE FILE (SOFT DELETE) */
-router.delete("/:id", protect, async (req, res) => {
+/* MOVE TO TRASH (SOFT DELETE) */
+router.post("/:id/trash", protect, async (req, res) => {
   try {
-    const { error } = await supabase
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    console.log(`🗑️ Moving item ${id} to trash for user ${userId}`);
+
+    // Try file first
+    const { data: file, error: fileError } = await supabase
       .from("files")
-      .update({ is_deleted: true })
-      .eq("id", req.params.id)
-      .eq("owner_id", req.user.id);
+      .update({
+        is_deleted: true,
+        deleted_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("owner_id", userId)
+      .select();
 
-    if (error) throw error;
+    if (file && file.length > 0) {
+      console.log('✅ File moved to trash');
+      
+      await logActivity({
+        userId,
+        action: "file_deleted",
+        resourceType: "file",
+        resourceId: id,
+      });
 
-    await logActivity({
-      userId: req.user.id,
-      action: "file_deleted",
-      resourceType: "file",
-      resourceId: req.params.id,
-    });
+      return res.json({ message: "File moved to trash" });
+    }
 
-    res.json({ message: "File moved to trash" });
-  } catch (err) {
-    console.error("Delete file error:", err);
-    res.status(500).json({ message: err.message });
-  }
-});
+    // Try folder
+    const { data: folder, error: folderError } = await supabase
+      .from("folders")
+      .update({
+        is_deleted: true,
+        deleted_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("owner_id", userId)
+      .select();
 
-/* RESTORE FILE */
-router.post("/:id/restore", protect, async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from("files")
-      .update({ is_deleted: false })
-      .eq("id", req.params.id)
-      .eq("owner_id", req.user.id)
-      .select()
-      .single();
+    if (folder && folder.length > 0) {
+      console.log('✅ Folder moved to trash');
+      
+      await logActivity({
+        userId,
+        action: "folder_deleted",
+        resourceType: "folder",
+        resourceId: id,
+      });
 
-    if (error) throw error;
+      return res.json({ message: "Folder moved to trash" });
+    }
 
-    const file = {
-      id: data.id,
-      name: data.name,
-      type: 'file',
-      size: data.size_bytes,
-      mimeType: data.mime_type,
-      parentId: data.folder_id,
-      path: `/${data.name}`,
-      isStarred: data.is_starred || false,
-      isTrashed: false,
-      owner: {
-        id: req.user.id,
-        name: req.user.name || "You",
-        email: req.user.email,
-      },
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
-    };
-
-    await logActivity({
-      userId: req.user.id,
-      action: "file_restored",
-      resourceType: "file",
-      resourceId: data.id,
-    });
-
-    res.json({ file });
-  } catch (err) {
-    console.error("Restore file error:", err);
-    res.status(500).json({ message: err.message });
+    console.log('❌ Item not found');
+    return res.status(404).json({ message: "Item not found" });
+  } catch (error) {
+    console.error('❌ Error moving to trash:', error);
+    res.status(500).json({ message: "Failed to move item to trash", error: error.message });
   }
 });
 

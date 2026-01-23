@@ -5,11 +5,13 @@ import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useUIStore } from '@/lib/store/uiStore';
+import { useFileStore } from '@/lib/store/fileStore';
 import { foldersApi } from '@/lib/api/folders';
 import { Folder } from 'lucide-react';
 
 export const CreateFolderModal: React.FC = () => {
-  const { activeModal, closeModal } = useUIStore();
+  const { activeModal, closeModal, modalData } = useUIStore();
+  const { currentFolder, triggerRefresh } = useFileStore();
   const [folderName, setFolderName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -35,17 +37,25 @@ export const CreateFolderModal: React.FC = () => {
 
     setLoading(true);
     try {
-      await foldersApi.createFolder(folderName.trim());
+      // Get the parent folder ID (current folder or from modal data)
+      const parentId = modalData?.parentId || currentFolder?.id || null;
       
-      // Call success callback if available
-      const callback = (window as any).__operationSuccessCallback;
-      if (callback) {
-        callback();
-      }
+      // Create the folder
+      await foldersApi.createFolder(folderName.trim(), parentId);
       
+      console.log('✅ Folder created successfully');
+      
+      // Close modal first
       closeModal();
       setFolderName('');
+      
+      // Trigger refresh after a short delay to ensure modal is closed
+      setTimeout(() => {
+        triggerRefresh();
+      }, 100);
+      
     } catch (err: any) {
+      console.error('❌ Failed to create folder:', err);
       setError(err.message || 'Failed to create folder');
     } finally {
       setLoading(false);

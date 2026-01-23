@@ -1,15 +1,24 @@
 import { create } from 'zustand';
 import { FileState } from '../types';
 
-export const useFileStore = create<FileState>((set) => ({
+interface ExtendedFileState extends FileState {
+  refreshTrigger: number;
+  triggerRefresh: () => void;
+}
+
+export const useFileStore = create<ExtendedFileState>((set) => ({
   files: [],
   currentFolder: null,
   selectedFiles: [],
-  viewMode: 'grid',
+  viewMode: (typeof window !== 'undefined' && localStorage.getItem('viewMode') as 'grid' | 'list') || 'grid',
   isLoading: false,
   breadcrumbs: [{ id: 'root', name: 'My Drive', path: '/' }],
   searchQuery: '',
   uploads: [],
+  refreshTrigger: 0,
+
+  // Trigger a refresh by incrementing the counter
+  triggerRefresh: () => set((state) => ({ refreshTrigger: state.refreshTrigger + 1 })),
 
   setFiles: (files) => set({ files }),
 
@@ -25,7 +34,9 @@ export const useFileStore = create<FileState>((set) => ({
     })),
 
   setViewMode: (mode) => {
-    localStorage.setItem('viewMode', mode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('viewMode', mode);
+    }
     set({ viewMode: mode });
   },
 

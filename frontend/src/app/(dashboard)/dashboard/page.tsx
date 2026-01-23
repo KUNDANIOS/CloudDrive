@@ -16,23 +16,34 @@ export default function DashboardPage() {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-  const { setFiles: setStoreFiles, setCurrentFolder } = useFileStore();
+  const { setFiles: setStoreFiles, setCurrentFolder, refreshTrigger } = useFileStore();
   const { openModal } = useUIStore();
 
+  // Load files when folder changes
   useEffect(() => {
     loadFiles();
   }, [currentFolderId]);
 
+  // Load files when refresh is triggered
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      console.log('🔄 Dashboard: Refresh triggered, count:', refreshTrigger);
+      loadFiles();
+    }
+  }, [refreshTrigger]);
+
   const loadFiles = async () => {
     setIsLoading(true);
     try {
+      console.log('📁 Dashboard: Loading files for folder:', currentFolderId || 'root');
       // Get folder contents (includes both folders and files)
       const items = await foldersApi.getFolderContents(currentFolderId);
       
+      console.log('✅ Dashboard: Loaded', items.length, 'items');
       setFiles(items);
       setStoreFiles(items);
     } catch (error) {
-      console.error('Failed to load files:', error);
+      console.error('❌ Dashboard: Failed to load files:', error);
       setFiles([]);
       setStoreFiles([]);
     } finally {
@@ -95,14 +106,15 @@ export default function DashboardPage() {
 
   // Called after any successful operation
   const handleOperationSuccess = () => {
+    console.log('✨ Dashboard: Operation success, reloading files');
     loadFiles();
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex-1">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
             My Drive
           </h1>

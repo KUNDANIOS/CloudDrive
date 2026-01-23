@@ -27,6 +27,10 @@ router.post("/email", protect, async (req, res) => {
       return res.status(404).json({ message: "File not found" });
     }
 
+    // Check if user exists with this email (using Supabase auth.users)
+    const { data: authUsers } = await supabase.auth.admin.listUsers();
+    const recipient = authUsers.users.find(u => u.email === email);
+
     // Create share record in database
     const { data: share, error: shareError } = await supabase
       .from("shares")
@@ -34,7 +38,9 @@ router.post("/email", protect, async (req, res) => {
         file_id: fileId,
         owner_id: req.user.id,
         shared_with_email: email,
+        shared_with_user_id: recipient ? recipient.id : null, // Link to user if they exist
         permission: 'view',
+        status: recipient ? 'accepted' : 'pending', // Auto-accept if user exists
       })
       .select()
       .single();
@@ -130,6 +136,162 @@ router.post("/email", protect, async (req, res) => {
   } catch (err) {
     console.error("Share error:", err);
     res.status(500).json({ message: err.message || 'Failed to share file' });
+  }
+});
+
+/* GET FILES SHARED WITH ME - NEW ENDPOINT */
+router.get("/shared-with-me", protect, async (req, res) => {
+  try {
+    // Get shares by email OR by user_id
+    const { data: shares, error: sharesError } = await supabase
+      .from("shares")
+      .select(`
+        id,
+        file_id,
+        owner_id,
+        shared_with_email,
+        permission,
+        status,
+        created_at,
+        files (*)
+      `)
+      .or(`shared_with_email.eq.${req.user.email},shared_with_user_id.eq.${req.user.id}`)
+      .order('created_at', { ascending: false });
+
+    if (sharesError) throw sharesError;
+
+    // Update pending shares to accepted for logged-in user
+    const pendingShares = shares.filter(s => s.status === 'pending');
+    if (pendingShares.length > 0) {
+      const shareIds = pendingShares.map(s => s.id);
+      await supabase
+        .from("shares")
+        .update({ 
+          shared_with_user_id: req.user.id,
+          status: 'accepted' 
+        })
+        .in('id', shareIds);
+    }
+
+    // Get owner profile information
+    const ownerIds = [...new Set(shares.map(s => s.owner_id))];
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, name, email")
+      .in("id", ownerIds);
+
+    const profileMap = {};
+    profiles?.forEach(p => {
+      profileMap[p.id] = p;
+    });
+
+    // Format response - using all file columns
+    const sharedFiles = shares.map(share => ({
+      ...share.files,
+      // Add share metadata
+      share_id: share.id,
+      permission: share.permission,
+      shared_by: profileMap[share.owner_id] || { id: share.owner_id, name: 'Unknown', email: '' },
+      shared_at: share.created_at,
+    }));
+
+    res.json({ files: sharedFiles });
+  } catch (err) {
+    console.error("Get shared files error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/* ACCESS SHARED FILE BY SHARE ID - NEW ENDPOINT */
+router.get("/:shareId", async (req, res) => {
+  try {
+    const { shareId } = req.params;
+
+    // Get share with file details
+    const { data: share, error: shareError } = await supabase
+      .from("shares")
+      .select(`
+        id,
+        file_id,
+        owner_id,
+        shared_with_email,
+        permission,
+        status,
+        created_at,
+        files (*)
+      `)
+      .eq("id", shareId)
+      .single();
+
+    if (shareError || !share) {
+      return res.status(404).json({ message: "Share not found" });
+    }
+
+    // Get owner profile
+    const { data: ownerProfile } = await supabase
+      .from("profiles")
+      .select("id, name, email")
+      .eq("id", share.owner_id)
+      .single();
+
+    res.json({ 
+      share: {
+        id: share.id,
+        file: share.files,
+        owner: ownerProfile || { id: share.owner_id, name: 'Unknown', email: '' },
+        permission: share.permission,
+        status: share.status,
+        shared_with_email: share.shared_with_email,
+        created_at: share.created_at,
+      }
+    });
+  } catch (err) {
+    console.error("Get share error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/* ACCEPT/CLAIM SHARED FILE - NEW ENDPOINT */
+router.post("/:shareId/accept", protect, async (req, res) => {
+  try {
+    const { shareId } = req.params;
+
+    // Get the share
+    const { data: share, error: shareError } = await supabase
+      .from("shares")
+      .select("*")
+      .eq("id", shareId)
+      .single();
+
+    if (shareError || !share) {
+      return res.status(404).json({ message: "Share not found" });
+    }
+
+    // Check if user's email matches
+    if (share.shared_with_email !== req.user.email) {
+      return res.status(403).json({ message: "This share is not for you" });
+    }
+
+    // Update share to link with user and mark as accepted
+    const { data: updatedShare, error: updateError } = await supabase
+      .from("shares")
+      .update({ 
+        shared_with_user_id: req.user.id,
+        status: 'accepted' 
+      })
+      .eq("id", shareId)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    res.json({ 
+      message: "Share accepted successfully",
+      share: updatedShare 
+    });
+  } catch (err) {
+    console.error("Accept share error:", err);
+    res.status(500).json({ message: err.message });
   }
 });
 

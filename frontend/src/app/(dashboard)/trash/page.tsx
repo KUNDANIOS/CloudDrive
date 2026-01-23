@@ -1,44 +1,52 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { Trash2 } from 'lucide-react';
+
 import { FileGrid } from '@/components/dashboard/FileGrid';
 import { filesApi } from '@/lib/api/files';
 import { FileItem } from '@/lib/types';
-import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 export default function TrashPage() {
-  const [files, setFiles] = useState<FileItem[]>([]);
+  const [items, setItems] = useState<FileItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadTrashedFiles();
+    loadTrashedItems();
   }, []);
 
-  const loadTrashedFiles = async () => {
-    setIsLoading(true);
+  const loadTrashedItems = async () => {
     try {
-      const data = await filesApi.getTrashedFiles();
-      setFiles(data);
+      setIsLoading(true);
+      // ✅ Use the existing filesApi method
+      const trashedItems = await filesApi.getTrashedFiles();
+      setItems(trashedItems);
     } catch (error) {
-      console.error('Failed to load trashed files:', error);
+      console.error('Failed to load trashed items:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleFileOpen = (file: FileItem) => {
-    console.log('Open file:', file.id);
-  };
+  // 🚫 disable open in trash
+  const handleFileOpen = () => {};
 
   const handleEmptyTrash = async () => {
-    if (confirm('Are you sure you want to permanently delete all files in trash?')) {
-      console.log('Empty trash');
+    if (!confirm('Are you sure you want to permanently delete all items in trash?')) return;
+
+    try {
+      await filesApi.emptyTrash();
+      setItems([]);
+    } catch (error) {
+      console.error('Failed to empty trash:', error);
+      alert('Failed to empty trash');
     }
   };
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-lg">
@@ -53,14 +61,21 @@ export default function TrashPage() {
             </p>
           </div>
         </div>
-        {files.length > 0 && (
+
+        {items.length > 0 && (
           <Button variant="danger" onClick={handleEmptyTrash}>
             Empty Trash
           </Button>
         )}
       </div>
 
-      <FileGrid files={files} isLoading={isLoading} onFileOpen={handleFileOpen} />
+      {/* Grid */}
+      <FileGrid
+        files={items}
+        isLoading={isLoading}
+        onFileOpen={handleFileOpen}
+        isTrash
+      />
     </div>
   );
 }

@@ -1,8 +1,11 @@
 import apiClient, { handleApiError } from './client';
-import { FileItem, File } from '../types';
+import { FileItem } from '../types';
 
 export const filesApi = {
-  // Get all files in a folder
+  /* =========================
+     FILE LISTING
+  ========================= */
+
   getFiles: async (folderId?: string | null): Promise<FileItem[]> => {
     try {
       const params = folderId ? { parentId: folderId } : {};
@@ -13,7 +16,6 @@ export const filesApi = {
     }
   },
 
-  // Get file by ID
   getFileById: async (fileId: string): Promise<FileItem> => {
     try {
       const response = await apiClient.get<{ file: FileItem }>(`/files/${fileId}`);
@@ -23,30 +25,33 @@ export const filesApi = {
     }
   },
 
-  // Upload file
+  /* =========================
+     UPLOAD
+  ========================= */
+
   uploadFile: async (
-    file: globalThis.File, 
+    file: globalThis.File,
     folderId?: string | null,
     onProgress?: (progress: number) => void
   ): Promise<FileItem> => {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      if (folderId) {
-        formData.append('parentId', folderId);
-      }
+      if (folderId) formData.append('parentId', folderId);
 
-      const response = await apiClient.post<{ file: FileItem }>('/files/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        onUploadProgress: (progressEvent) => {
-          if (progressEvent.total) {
-            const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-            onProgress?.(progress);
-          }
-        },
-      });
+      const response = await apiClient.post<{ file: FileItem }>(
+        '/files/upload',
+        formData,
+        {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          onUploadProgress: (e) => {
+            if (e.total) {
+              const progress = Math.round((e.loaded * 100) / e.total);
+              onProgress?.(progress);
+            }
+          },
+        }
+      );
 
       return response.data.file;
     } catch (error) {
@@ -54,16 +59,10 @@ export const filesApi = {
     }
   },
 
-  // Delete file
-  deleteFile: async (fileId: string): Promise<void> => {
-    try {
-      await apiClient.delete(`/files/${fileId}`);
-    } catch (error) {
-      throw new Error(handleApiError(error));
-    }
-  },
+  /* =========================
+     UPDATE / MOVE
+  ========================= */
 
-  // Rename file
   renameFile: async (fileId: string, newName: string): Promise<FileItem> => {
     try {
       const response = await apiClient.patch<{ file: FileItem }>(`/files/${fileId}`, {
@@ -75,19 +74,22 @@ export const filesApi = {
     }
   },
 
-  // Move file
   moveFile: async (fileId: string, newParentId: string | null): Promise<FileItem> => {
     try {
-      const response = await apiClient.patch<{ file: FileItem }>(`/files/${fileId}/move`, {
-        parentId: newParentId,
-      });
+      const response = await apiClient.patch<{ file: FileItem }>(
+        `/files/${fileId}/move`,
+        { parentId: newParentId }
+      );
       return response.data.file;
     } catch (error) {
       throw new Error(handleApiError(error));
     }
   },
 
-  // Star/unstar file
+  /* =========================
+     STAR / RECENT
+  ========================= */
+
   toggleStar: async (fileId: string): Promise<FileItem> => {
     try {
       const response = await apiClient.post<{ file: FileItem }>(`/files/${fileId}/star`);
@@ -97,7 +99,6 @@ export const filesApi = {
     }
   },
 
-  // Get starred files
   getStarredFiles: async (): Promise<FileItem[]> => {
     try {
       const response = await apiClient.get<{ files: FileItem[] }>('/files/starred');
@@ -107,7 +108,6 @@ export const filesApi = {
     }
   },
 
-  // Get recent files
   getRecentFiles: async (): Promise<FileItem[]> => {
     try {
       const response = await apiClient.get<{ files: FileItem[] }>('/files/recent');
@@ -117,17 +117,11 @@ export const filesApi = {
     }
   },
 
-  // Get trashed files
-  getTrashedFiles: async (): Promise<FileItem[]> => {
-    try {
-      const response = await apiClient.get<{ files: FileItem[] }>('/files/trash');
-      return response.data.files;
-    } catch (error) {
-      throw new Error(handleApiError(error));
-    }
-  },
+  /* =========================
+     TRASH (✔ FULLY FIXED)
+  ========================= */
 
-  // Move to trash
+  // Move file to trash (soft delete)
   moveToTrash: async (fileId: string): Promise<void> => {
     try {
       await apiClient.post(`/files/${fileId}/trash`);
@@ -136,17 +130,51 @@ export const filesApi = {
     }
   },
 
-  // Restore from trash
-  restoreFromTrash: async (fileId: string): Promise<FileItem> => {
+  // Get trashed files + folders
+  getTrashedFiles: async (): Promise<FileItem[]> => {
     try {
-      const response = await apiClient.post<{ file: FileItem }>(`/files/${fileId}/restore`);
-      return response.data.file;
+      const response = await apiClient.get<{
+        files: FileItem[];
+        folders: FileItem[];
+      }>('/files/trash');
+
+      return [...response.data.files, ...response.data.folders];
     } catch (error) {
       throw new Error(handleApiError(error));
     }
   },
 
-  // Search files
+  // Restore from trash
+  restoreFile: async (fileId: string): Promise<void> => {
+    try {
+      await apiClient.patch(`/files/${fileId}/restore`);
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  // Delete forever (from trash)
+  permanentDelete: async (fileId: string): Promise<void> => {
+    try {
+      await apiClient.delete(`/files/${fileId}/permanent`);
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  // Empty entire trash
+  emptyTrash: async (): Promise<void> => {
+    try {
+      await apiClient.delete('/files/trash/empty');
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /* =========================
+     SEARCH / DOWNLOAD
+  ========================= */
+
   searchFiles: async (query: string): Promise<FileItem[]> => {
     try {
       const response = await apiClient.get<{ files: FileItem[] }>('/files/search', {
@@ -158,13 +186,58 @@ export const filesApi = {
     }
   },
 
-  // Download file
-    // Download file
   downloadFile: async (fileId: string): Promise<Blob> => {
     try {
-      const response = await apiClient.get<{ url: string }>(`/files/${fileId}/download`);
+      const response = await apiClient.get<{ url: string }>(
+        `/files/${fileId}/download`
+      );
       const fileResponse = await fetch(response.data.url);
       return await fileResponse.blob();
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /* =========================
+     SHARING / STORAGE
+  ========================= */
+
+  getSharedFiles: async (): Promise<FileItem[]> => {
+    try {
+      const response = await apiClient.get<{ files: FileItem[] }>('/files/shared');
+      return response.data.files;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  shareFile: async (fileId: string, userEmails: string[]): Promise<void> => {
+    try {
+      await apiClient.post(`/files/${fileId}/share`, { emails: userEmails });
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  getFileSharing: async (
+    fileId: string
+  ): Promise<{ sharedWith: string[] }> => {
+    try {
+      const response = await apiClient.get<{ sharedWith: string[] }>(
+        `/files/${fileId}/sharing`
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  getStorageUsage: async (): Promise<{ used: number; limit: number }> => {
+    try {
+      const response = await apiClient.get<{ used: number; limit: number }>(
+        '/files/storage'
+      );
+      return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
     }

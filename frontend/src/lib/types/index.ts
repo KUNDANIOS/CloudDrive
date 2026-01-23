@@ -131,6 +131,8 @@ export interface FileState {
   breadcrumbs: Array<{ id: string; name: string; path: string }>;
   searchQuery: string;
   uploads: Upload[];
+  refreshTrigger: number; // ✅ Added
+  triggerRefresh: () => void; // ✅ Added
   setFiles: (files: FileItem[]) => void;
   setCurrentFolder: (folder: Folder | null) => void;
   setSelectedFiles: (ids: string[]) => void;

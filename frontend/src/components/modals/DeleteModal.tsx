@@ -26,7 +26,8 @@ export const DeleteModal: React.FC = () => {
       if (file.type === 'folder') {
         await foldersApi.deleteFolder(file.id);
       } else {
-        await filesApi.deleteFile(file.id);
+        await filesApi.moveToTrash(file.id);
+
       }
 
       // Call success callback
