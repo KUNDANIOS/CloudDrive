@@ -74,7 +74,6 @@ export default function TrashPage() {
         files={items}
         isLoading={isLoading}
         onFileOpen={handleFileOpen}
-        isTrash
       />
     </div>
   );

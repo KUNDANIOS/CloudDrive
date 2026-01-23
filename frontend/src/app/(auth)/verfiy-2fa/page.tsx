@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AuthCard } from '@/components/auth/AuthCard';
 import { Input } from '@/components/ui/Input';
@@ -10,8 +10,7 @@ import { useAuthStore } from '@/lib/store/authStore';
 import { Shield } from 'lucide-react';
 import Cookies from 'js-cookie';
 
-
-export default function Verify2FAPage() {
+function Verify2FAContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { setUser } = useAuthStore();
@@ -84,5 +83,19 @@ export default function Verify2FAPage() {
         </Button>
       </form>
     </AuthCard>
+  );
+}
+
+export default function Verify2FAPage() {
+  return (
+    <Suspense fallback={
+      <AuthCard title="Two-Factor Authentication" subtitle="Loading...">
+        <div className="flex items-center justify-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      </AuthCard>
+    }>
+      <Verify2FAContent />
+    </Suspense>
   );
 }

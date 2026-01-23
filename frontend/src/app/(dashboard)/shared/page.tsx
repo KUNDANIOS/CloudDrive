@@ -34,7 +34,7 @@ export default function SharedWithMePage() {
   };
 
   const handleFileOpen = async (file: FileItem) => {
-    if (file.is_folder) {
+    if (file.type === 'folder') {
       // Navigate to folder view inside dashboard
       router.push(`/dashboard/folder/${file.id}`);
     } else {
@@ -64,18 +64,13 @@ export default function SharedWithMePage() {
   };
 
   const handleStar = async (file: FileItem) => {
-    try {
-      if (file.is_starred) {
-        await filesApi.unstarFile(file.id);
-      } else {
-        await filesApi.starFile(file.id);
-      }
-      await loadSharedFiles(); // Refresh to update star status
-    } catch (err) {
-      console.error('Failed to toggle star:', err);
-    }
-  };
-
+  try {
+    await filesApi.toggleStar(file.id);
+    await loadSharedFiles(); // Refresh to update star status
+  } catch (err) {
+    console.error('Failed to toggle star:', err);
+  }
+};
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <Topbar />

@@ -88,10 +88,10 @@ export default function MyDrivePage() {
   return (
     <div className="space-y-6">
       {/* Quick Access Apps - Only show on root */}
-      {!currentFolder && <QuickAccessApps />}
+      {!currentFolder && <QuickAccessApps appName="My Drive" />}
 
       {/* Breadcrumb */}
-      <Breadcrumb onRefresh={handleRefresh} />
+      <Breadcrumb />
 
       {/* File Display */}
       {viewMode === 'grid' ? (
@@ -103,7 +103,6 @@ export default function MyDrivePage() {
       ) : (
         <FileList 
           files={files} 
-          isLoading={isLoading} 
           onFileOpen={handleFileOpen}
         />
       )}

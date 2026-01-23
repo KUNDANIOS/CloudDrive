@@ -77,14 +77,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const response = await authApi.register(credentials);
 
-      Cookies.set('token', response.token, { expires: 7 });
-      localStorage.setItem('token', response.token);
-      localStorage.setItem('user', JSON.stringify(response.user));
-
+      // Registration successful, user needs verification
       set({
-        user: response.user,
-        token: response.token,
-        isAuthenticated: true,
+        user: { id: response.userId, email: response.email, name: '', createdAt: new Date().toISOString() },
+        token: null,
+        isAuthenticated: false,
         isLoading: false,
       });
     } catch (error) {
