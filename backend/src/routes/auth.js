@@ -100,15 +100,33 @@ router.post("/verify-email", authLimiter, async (req, res) => {
       return res.status(400).json({ message: "Email and OTP are required" });
     }
 
-    const { data: otpData } = await supabase
+    // Trim and convert to string
+    const cleanOTP = String(otp).trim();
+    const cleanEmail = String(email).trim().toLowerCase();
+
+    console.log("🔍 Looking for OTP:", { email: cleanEmail, otp: cleanOTP });
+
+    const { data: otpData, error: otpError } = await supabase
       .from("otp_verifications")
       .select("*")
-      .eq("email", email)
+      .eq("email", cleanEmail)
       .eq("otp_type", "email_verification")
       .eq("verified", false)
       .order("created_at", { ascending: false })
       .limit(1)
       .single();
+
+    // Log the query error if any
+    if (otpError) {
+      console.error("❌ OTP query error:", otpError);
+    }
+
+    console.log("📋 OTP Data found:", otpData ? {
+      id: otpData.id,
+      otp_code: otpData.otp_code,
+      expires_at: otpData.expires_at,
+      created_at: otpData.created_at
+    } : null);
 
     if (!otpData) {
       return res.status(400).json({ message: "Invalid OTP or OTP already used" });
@@ -118,7 +136,11 @@ router.post("/verify-email", authLimiter, async (req, res) => {
       return res.status(400).json({ message: "OTP expired. Please request a new one." });
     }
 
-    if (otpData.otp_code !== otp) {
+    // Clean stored OTP and compare
+    const storedOTP = String(otpData.otp_code).trim();
+    console.log("🔐 Comparing OTPs:", { stored: storedOTP, received: cleanOTP, match: storedOTP === cleanOTP });
+
+    if (storedOTP !== cleanOTP) {
       return res.status(400).json({ message: "Incorrect OTP" });
     }
 
@@ -133,7 +155,7 @@ router.post("/verify-email", authLimiter, async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    console.log("✅ Email verified:", email);
+    console.log("✅ Email verified:", cleanEmail);
     res.json({ message: "Email verified successfully", token });
   } catch (e) {
     console.error("💥 Verification error:", e);
