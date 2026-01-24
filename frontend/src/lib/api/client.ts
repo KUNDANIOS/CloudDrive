@@ -17,12 +17,12 @@ apiClient.interceptors.request.use(
   (config) => {
     // Debug logging for reset-password endpoint
     if (config.url?.includes('reset-password')) {
-      console.log('🚀 AXIOS REQUEST INTERCEPTOR:');
-      console.log('  URL:', config.url);
-      console.log('  Method:', config.method);
-      console.log('  Data:', config.data);
-      console.log('  Data type:', typeof config.data);
-      console.log('  Data stringified:', JSON.stringify(config.data));
+      console.log('AXIOS REQUEST INTERCEPTOR:');
+      console.log('URL:', config.url);
+      console.log('Method:', config.method);
+      console.log('Data:', config.data);
+      console.log('Data type:', typeof config.data);
+      console.log('Data stringified:', JSON.stringify(config.data));
     }
 
     const token = Cookies.get('token') || localStorage.getItem('token');

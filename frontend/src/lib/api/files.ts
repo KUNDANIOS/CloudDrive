@@ -2,9 +2,7 @@ import apiClient, { handleApiError } from './client';
 import { FileItem } from '../types';
 
 export const filesApi = {
-  /* =========================
-     FILE LISTING
-  ========================= */
+  /*FILE LISTING */
 
   getFiles: async (folderId?: string | null): Promise<FileItem[]> => {
     try {
@@ -25,9 +23,7 @@ export const filesApi = {
     }
   },
 
-  /* =========================
-     UPLOAD
-  ========================= */
+  /*UPLOAD*/
 
   uploadFile: async (
     file: globalThis.File,
@@ -59,9 +55,7 @@ export const filesApi = {
     }
   },
 
-  /* =========================
-     UPDATE / MOVE
-  ========================= */
+  /*UPDATE / MOVE*/
 
   renameFile: async (fileId: string, newName: string): Promise<FileItem> => {
     try {
@@ -86,9 +80,7 @@ export const filesApi = {
     }
   },
 
-  /* =========================
-     STAR / RECENT
-  ========================= */
+  /*STAR / RECENT*/
 
   toggleStar: async (fileId: string): Promise<FileItem> => {
     try {
@@ -117,9 +109,7 @@ export const filesApi = {
     }
   },
 
-  /* =========================
-     TRASH (✔ FULLY FIXED)
-  ========================= */
+  /*TRASH (✔ FULLY FIXED)*/
 
   // Move file to trash (soft delete)
   moveToTrash: async (fileId: string): Promise<void> => {
@@ -171,9 +161,7 @@ export const filesApi = {
     }
   },
 
-  /* =========================
-     SEARCH / DOWNLOAD
-  ========================= */
+  /*SEARCH / DOWNLOAD*/
 
   searchFiles: async (query: string): Promise<FileItem[]> => {
     try {
@@ -198,9 +186,7 @@ export const filesApi = {
     }
   },
 
-  /* =========================
-     SHARING / STORAGE
-  ========================= */
+  /*SHARING / STORAGE*/
 
   getSharedFiles: async (): Promise<FileItem[]> => {
     try {

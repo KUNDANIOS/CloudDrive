@@ -13,19 +13,19 @@ dotenv.config({ path: join(__dirname, '..', '.env') });
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY; // Changed from SUPABASE_ANON_KEY
 
-console.log('🔍 Supabase Configuration Check:');
-console.log('   URL exists:', !!supabaseUrl);
-console.log('   Service Key exists:', !!supabaseServiceKey);
+console.log('Supabase Configuration Check:');
+console.log('URL exists:', !!supabaseUrl);
+console.log('Service Key exists:', !!supabaseServiceKey);
 
 if (!supabaseUrl) {
-  throw new Error('❌ SUPABASE_URL is missing from environment variables');
+  throw new Error('SUPABASE_URL is missing from environment variables');
 }
 
 if (!supabaseServiceKey) {
-  throw new Error('❌ SUPABASE_SERVICE_KEY is missing from environment variables');
+  throw new Error('SUPABASE_SERVICE_KEY is missing from environment variables');
 }
 
-console.log('✅ Supabase admin client created successfully');
+console.log('Supabase admin client created successfully');
 
 // Create admin client with service role key for backend operations
 export const supabase = createClient(supabaseUrl, supabaseServiceKey, {

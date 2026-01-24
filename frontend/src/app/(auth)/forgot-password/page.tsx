@@ -19,14 +19,14 @@ export default function ForgotPasswordPage() {
     setError('');
     setLoading(true);
 
-    console.log('🚀 Submitting forgot password for:', email);
+    console.log('Submitting forgot password for:', email);
 
     try {
       await authApi.forgotPassword(email);
-      console.log('✅ Forgot password request successful');
+      console.log('Forgot password request successful');
       setSuccess(true);
     } catch (err: any) {
-      console.error('❌ Forgot password error:', err);
+      console.error('Forgot password error:', err);
       console.error('Error details:', {
         message: err.message,
         response: err.response,

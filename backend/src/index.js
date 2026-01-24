@@ -23,40 +23,35 @@ import "./auth/google.js";
 
 const app = express();
 
-/* =========================
-   MIDDLEWARE
-========================= */
+/*CORS CONFIGURATION */
 
-// CORS Configuration - Allow multiple origins
 const allowedOrigins = [
-  'https://cloud-drive-five-lyart.vercel.app', // Production Vercel
-  'http://localhost:3000', // Local development
-  'http://localhost:5173', // Vite development
-  process.env.FRONTEND_URL // Additional custom frontend URL
-].filter(Boolean); // Remove undefined values
+  "https://clouddrive.store",
+  "https://www.clouddrive.store",
+  "https://cloud-drive-five-lyart.vercel.app",
+  "http://localhost:3000",
+  "http://localhost:5173",
+  process.env.FRONTEND_URL,
+].filter(Boolean);
 
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps, Postman, or curl)
+      // Allow server-to-server, Postman, curl
       if (!origin) return callback(null, true);
-      
-      // Allow all Vercel preview URLs (*.vercel.app)
-      if (origin && origin.includes('.vercel.app')) {
-        console.log(`✅ CORS allowed Vercel origin: ${origin}`);
+
+      // Allow all Vercel preview deployments
+      if (origin.endsWith(".vercel.app")) {
         return callback(null, true);
       }
-      
-      // Check if origin is in allowed list
+
+      // Allow explicitly whitelisted origins
       if (allowedOrigins.includes(origin)) {
-        console.log(`✅ CORS allowed origin: ${origin}`);
         return callback(null, true);
       }
-      
-      // Log rejected origin for debugging
-      console.warn(`⚠️ CORS blocked origin: ${origin}`);
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
+
+      console.warn("❌ CORS blocked:", origin);
+      return callback(null, false); // DO NOT throw error
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -64,52 +59,51 @@ app.use(
   })
 );
 
-// Body parsers
+// REQUIRED: handle preflight requests
+app.options("*", cors());
+
+/*BODY & AUTH MIDDLEWARE */
+
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cookieParser());
 app.use(passport.initialize());
 
-// Request logger (debug)
+/*REQUEST LOGGER (DEBUG)*/
+
 app.use((req, res, next) => {
-  const time = new Date().toISOString();
-  console.log(`[${time}] ${req.method} ${req.path} - Origin: ${req.get('origin') || 'none'}`);
+  console.log(
+    `[${new Date().toISOString()}] ${req.method} ${req.path} | Origin: ${
+      req.headers.origin || "none"
+    }`
+  );
   next();
 });
 
-/* =========================
-   HEALTH & ROOT
-========================= */
+/*HEALTH & ROOT */
 
 app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
     time: new Date().toISOString(),
-    environment: process.env.NODE_ENV || "development",
+    env: process.env.NODE_ENV || "development",
   });
 });
 
 app.get("/", (req, res) => {
   res.json({
     message: "CloudDrive Backend Running",
-    version: "1.0.0",
-    allowedOrigins: allowedOrigins,
+    allowedOrigins,
   });
 });
 
-/* =========================
-   API ROUTES
-   ⚠️ ORDER MATTERS! More specific routes FIRST
-========================= */
+/*API ROUTES*/
 
 app.use("/api/auth", authRoutes);
 app.use("/api/folders", folderRoutes);
 
-// ✅ Mount trash routes BEFORE general file routes
-// This ensures /api/files/trash/* is handled by trashRoutes
+// Trash routes MUST come before files
 app.use("/api/files/trash", trashRoutes);
-
-// ✅ General file routes come AFTER
 app.use("/api/files", fileRoutes);
 
 app.use("/api/shares", shareRoutes);
@@ -117,53 +111,37 @@ app.use("/api/link", linkShareRoutes);
 app.use("/api/logs", logsRoutes);
 app.use("/api/activity", activityRoutes);
 
-/* =========================
-   404 HANDLER
-========================= */
+/*404 HANDLER*/
 
 app.use((req, res) => {
-  console.log(`❌ 404 - ${req.method} ${req.path}`);
   res.status(404).json({
     message: "Route not found",
-    path: req.path,
     method: req.method,
+    path: req.path,
   });
 });
 
-/* =========================
-   ERROR HANDLER
-========================= */
+/*GLOBAL ERROR HANDLER*/
 
 app.use((err, req, res, next) => {
-  console.error("💥 Error:", err);
+  console.error(" Server Error:", err.message);
   res.status(err.status || 500).json({
-    message: err.message || "Internal server error",
+    message: err.message || "Internal Server Error",
     ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
   });
 });
 
-/* =========================
-   SERVER START
-========================= */
+/*SERVER START*/
 
 const PORT = process.env.PORT || 4000;
 
 app.listen(PORT, () => {
   console.log("=".repeat(60));
-  console.log("🚀 CloudDrive Backend Server");
-  console.log("=".repeat(60));
-  console.log(`📍 http://localhost:${PORT}`);
-  console.log(`🌍 ENV: ${process.env.NODE_ENV || "development"}`);
-  console.log(`🔗 Allowed Origins:`);
-  allowedOrigins.forEach(origin => console.log(`   - ${origin}`));
-  console.log("=".repeat(60));
-  console.log("");
-  console.log("📋 Registered Routes:");
-  console.log("  - POST   /api/files/:id/trash");
-  console.log("  - GET    /api/files/trash");
-  console.log("  - PATCH  /api/files/trash/:id/restore");
-  console.log("  - DELETE /api/files/trash/:id/permanent");
-  console.log("  - DELETE /api/files/trash/empty");
+  console.log(" CloudDrive Backend Server Running");
+  console.log(` PORT: ${PORT}`);
+  console.log(` ENV: ${process.env.NODE_ENV || "development"}`);
+  console.log("Allowed Origins:");
+  allowedOrigins.forEach((o) => console.log("   -", o));
   console.log("=".repeat(60));
 });
 

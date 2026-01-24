@@ -27,7 +27,7 @@ router.get("/storage", protect, async (req, res) => {
     // 5GB limit in bytes
     const limitBytes = 5 * 1024 * 1024 * 1024; // 5GB
 
-    console.log(`📊 Storage for user ${userId}: ${totalBytes} / ${limitBytes} bytes`);
+    console.log(`Storage for user ${userId}: ${totalBytes} / ${limitBytes} bytes`);
 
     res.json({
       used: totalBytes,
@@ -421,7 +421,7 @@ router.post("/:id/trash", protect, async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
 
-    console.log(`🗑️ Moving item ${id} to trash for user ${userId}`);
+    console.log(`Moving item ${id} to trash for user ${userId}`);
 
     // Try file first
     const { data: file, error: fileError } = await supabase
@@ -435,7 +435,7 @@ router.post("/:id/trash", protect, async (req, res) => {
       .select();
 
     if (file && file.length > 0) {
-      console.log('✅ File moved to trash');
+      console.log('File moved to trash');
       
       await logActivity({
         userId,
@@ -459,7 +459,7 @@ router.post("/:id/trash", protect, async (req, res) => {
       .select();
 
     if (folder && folder.length > 0) {
-      console.log('✅ Folder moved to trash');
+      console.log('Folder moved to trash');
       
       await logActivity({
         userId,
@@ -471,10 +471,10 @@ router.post("/:id/trash", protect, async (req, res) => {
       return res.json({ message: "Folder moved to trash" });
     }
 
-    console.log('❌ Item not found');
+    console.log('Item not found');
     return res.status(404).json({ message: "Item not found" });
   } catch (error) {
-    console.error('❌ Error moving to trash:', error);
+    console.error('Error moving to trash:', error);
     res.status(500).json({ message: "Failed to move item to trash", error: error.message });
   }
 });

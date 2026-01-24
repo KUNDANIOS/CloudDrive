@@ -7,7 +7,7 @@ const getFromAddress = () => {
   return process.env.EMAIL_FROM || "CloudDrive <no-reply@clouddrive.store>";
 };
 
-// ================= OTP EMAIL =================
+//OTP EMAIL
 export async function sendOTPEmail(email, otp, type = "verification") {
   const subjects = {
     verification: "Verify Your Email - CloudDrive",
@@ -23,8 +23,8 @@ export async function sendOTPEmail(email, otp, type = "verification") {
     twoFactor: "Two-Factor Authentication",
   };
 
-  console.log("📨 Sending OTP:", otp, "to:", email);
-  console.log("📤 FROM:", getFromAddress());
+  console.log("Sending OTP:", otp, "to:", email);
+  console.log("FROM:", getFromAddress());
 
   try {
     const result = await resend.emails.send({
@@ -50,18 +50,18 @@ export async function sendOTPEmail(email, otp, type = "verification") {
       `,
     });
 
-    console.log("✅ OTP email sent:", result);
+    console.log("OTP email sent:", result);
     return true;
   } catch (error) {
-    console.error("❌ OTP email failed:", error);
+    console.error("OTP email failed:", error);
     throw new Error("Failed to send OTP email");
   }
 }
 
-// ================= PASSWORD RESET EMAIL =================
+//PASSWORD RESET EMAIL
 export async function sendPasswordResetEmail(email, resetLink) {
-  console.log("📨 Sending reset email to:", email);
-  console.log("📤 FROM:", getFromAddress());
+  console.log("Sending reset email to:", email);
+  console.log("FROM:", getFromAddress());
 
   try {
     const result = await resend.emails.send({
@@ -90,10 +90,10 @@ export async function sendPasswordResetEmail(email, resetLink) {
       `,
     });
 
-    console.log("✅ Reset email sent:", result);
+    console.log("Reset email sent:", result);
     return true;
   } catch (error) {
-    console.error("❌ Reset email failed:", error);
+    console.error("Reset email failed:", error);
     throw new Error("Failed to send reset email");
   }
 }

@@ -39,11 +39,11 @@ export default function LoginPage() {
         router.push('/dashboard');
       }
     } catch (err: any) {
-      console.error('❌ Login error caught:', err);
+      console.error('Login error caught:', err);
       
       // Check if verification is required
       if (err.requiresVerification) {
-        console.log('✉️ Redirecting to verification page');
+        console.log('Redirecting to verification page');
         const email = err.email || formData.email;
         router.push(`/verify-email?email=${encodeURIComponent(email)}`);
         return; // Don't show error, just redirect
