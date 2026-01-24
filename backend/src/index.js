@@ -27,10 +27,30 @@ const app = express();
    MIDDLEWARE
 ========================= */
 
-// CORS (must be before routes)
+// CORS Configuration - Allow multiple origins
+const allowedOrigins = [
+  'https://cloud-drive-five-lyart.vercel.app', // Production Vercel
+  'http://localhost:3000', // Local development
+  'http://localhost:5173', // Vite development
+  process.env.FRONTEND_URL // Additional custom frontend URL
+].filter(Boolean); // Remove undefined values
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps, Postman, or curl)
+      if (!origin) return callback(null, true);
+      
+      // Check if origin is in allowed list
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      
+      // Log rejected origin for debugging
+      console.warn(`⚠️ CORS blocked origin: ${origin}`);
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
@@ -46,7 +66,7 @@ app.use(passport.initialize());
 // Request logger (debug)
 app.use((req, res, next) => {
   const time = new Date().toISOString();
-  console.log(`[${time}] ${req.method} ${req.path}`);
+  console.log(`[${time}] ${req.method} ${req.path} - Origin: ${req.get('origin') || 'none'}`);
   next();
 });
 
@@ -66,6 +86,7 @@ app.get("/", (req, res) => {
   res.json({
     message: "CloudDrive Backend Running",
     version: "1.0.0",
+    allowedOrigins: allowedOrigins,
   });
 });
 
@@ -126,7 +147,8 @@ app.listen(PORT, () => {
   console.log("=".repeat(60));
   console.log(`📍 http://localhost:${PORT}`);
   console.log(`🌍 ENV: ${process.env.NODE_ENV || "development"}`);
-  console.log(`🔗 Frontend: ${process.env.FRONTEND_URL || "http://localhost:3000"}`);
+  console.log(`🔗 Allowed Origins:`);
+  allowedOrigins.forEach(origin => console.log(`   - ${origin}`));
   console.log("=".repeat(60));
   console.log("");
   console.log("📋 Registered Routes:");
