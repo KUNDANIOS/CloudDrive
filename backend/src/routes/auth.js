@@ -36,9 +36,12 @@ router.post("/register", authLimiter, async (req, res) => {
       return res.status(400).json({ message: "Email, password, and name are required" });
     }
 
+    // Clean and normalize email
+    const cleanEmail = String(email).trim().toLowerCase();
+
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(cleanEmail)) {
       return res.status(400).json({ message: "Invalid email format" });
     }
 
@@ -48,7 +51,7 @@ router.post("/register", authLimiter, async (req, res) => {
     }
 
     const { data: authData, error } = await supabase.auth.admin.createUser({
-      email,
+      email: cleanEmail,  // Use cleaned email
       password,
       email_confirm: false,
     });
@@ -67,21 +70,27 @@ router.post("/register", authLimiter, async (req, res) => {
     });
 
     const otp = generateOTP(6);
-    await supabase.from("otp_verifications").insert({
+    console.log("🔢 Generated OTP:", otp, "for:", cleanEmail);  // Added logging
+    
+    const { error: otpError } = await supabase.from("otp_verifications").insert({
       user_id: authData.user.id,
-      email,
+      email: cleanEmail,  // Use cleaned email
       otp_code: otp,
       otp_type: "email_verification",
       expires_at: getOTPExpiry(10),
     });
 
-    await sendOTPEmail(email, otp, "verification");
+    if (otpError) {
+      console.error("❌ OTP insert error:", otpError);
+    }
+
+    await sendOTPEmail(cleanEmail, otp, "verification");  // Use cleaned email
     console.log("✅ User registered:", authData.user.id);
 
     res.json({
       message: "Registered! Check your email for OTP.",
       userId: authData.user.id,
-      email,
+      email: cleanEmail,  // Return cleaned email
       requiresVerification: true,
     });
   } catch (e) {
