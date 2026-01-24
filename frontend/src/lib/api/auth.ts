@@ -39,19 +39,35 @@ export const authApi = {
       throw new Error(handleApiError(error));
     }
   },
-
-  // Login user
-  login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
-    try {
-      console.log('🔐 Calling login API');
-      const response = await apiClient.post<AuthResponse>('/auth/login', credentials);
-      console.log('✅ Login response:', response.data);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Login error:', error);
-      throw new Error(handleApiError(error));
+// Login user
+login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
+  try {
+    console.log('🔐 Calling login API');
+    const response = await apiClient.post('/auth/login', credentials);
+    console.log('✅ Login API response:', response.data);
+    
+    // Check if verification is required
+    if (response.data.requiresVerification) {
+      console.log('⚠️ Email verification required');
+      // Throw a special error that the login page can catch
+      const error: any = new Error(response.data.message || 'Please verify your email first');
+      error.requiresVerification = true;
+      error.email = response.data.email;
+      throw error;
     }
-  },
+    
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Login error:', error);
+    
+    // Re-throw verification errors
+    if (error.requiresVerification) {
+      throw error;
+    }
+    
+    throw new Error(handleApiError(error));
+  }
+},
 
   // Verify 2FA
   verify2FA: async (email: string, otp: string): Promise<AuthResponse> => {

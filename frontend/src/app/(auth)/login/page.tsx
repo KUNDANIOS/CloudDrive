@@ -2,20 +2,23 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { AuthCard } from '@/components/auth/AuthCard';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { useAuthStore } from '@/lib/store/authStore';
 import { authApi } from '@/lib/api/auth';
+import { useAuthStore } from '@/lib/store/authStore';
 import { Mail, Lock } from 'lucide-react';
+import Link from 'next/link';
 import Cookies from 'js-cookie';
 
 export default function LoginPage() {
   const router = useRouter();
   const { setUser } = useAuthStore();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+  });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -25,29 +28,29 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await authApi.login({ email, password });
-
-      // Check if requires verification
-      if ((response as any).requiresVerification) {
-        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
-        return;
+      const response = await authApi.login(formData);
+      
+      // Successful login
+      if (response.token && response.user) {
+        Cookies.set('token', response.token, { expires: 7 });
+        localStorage.setItem('token', response.token);
+        localStorage.setItem('user', JSON.stringify(response.user));
+        setUser(response.user);
+        router.push('/dashboard');
       }
-
-      // Check if requires 2FA
-      if ((response as any).requires2FA) {
-        router.push(`/verify-2fa?email=${encodeURIComponent(email)}`);
-        return;
-      }
-
-      // Regular login
-      Cookies.set('token', response.token, { expires: 7 });
-      localStorage.setItem('token', response.token);
-      localStorage.setItem('user', JSON.stringify(response.user));
-      setUser(response.user);
-
-      router.push('/dashboard');
     } catch (err: any) {
-      setError(err.message || 'Failed to sign in');
+      console.error('❌ Login error caught:', err);
+      
+      // Check if verification is required
+      if (err.requiresVerification) {
+        console.log('✉️ Redirecting to verification page');
+        const email = err.email || formData.email;
+        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+        return; // Don't show error, just redirect
+      }
+      
+      // Show other errors
+      setError(err.message || 'Login failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -65,30 +68,36 @@ export default function LoginPage() {
           </div>
         )}
 
-        <Input
-          type="email"
-          label="Email"
-          placeholder="name@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          leftIcon={<Mail className="w-5 h-5" />}
-          required
-        />
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Email
+          </label>
+          <Input
+            type="email"
+            placeholder="Enter your email"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            required
+          />
+        </div>
 
-        <Input
-          type="password"
-          label="Password"
-          placeholder="Enter your password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          leftIcon={<Lock className="w-5 h-5" />}
-          required
-        />
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Password
+          </label>
+          <Input
+            type="password"
+            placeholder="Enter your password"
+            value={formData.password}
+            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+            required
+          />
+        </div>
 
-        <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center justify-end">
           <Link
             href="/forgot-password"
-            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
+            className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
           >
             Forgot password?
           </Link>
@@ -98,12 +107,12 @@ export default function LoginPage() {
           Continue
         </Button>
 
-        <div className="text-center text-sm text-gray-600 dark:text-gray-400">
+        <p className="text-center text-sm text-gray-600 dark:text-gray-400">
           Don't have an account?{' '}
-          <Link href="/register" className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium">
+          <Link href="/register" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
             Sign up
           </Link>
-        </div>
+        </p>
       </form>
     </AuthCard>
   );

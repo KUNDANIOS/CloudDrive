@@ -280,30 +280,45 @@ router.post("/login", authLimiter, async (req, res) => {
       return res.status(400).json({ message: "Email and password are required" });
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const cleanEmail = String(email).trim().toLowerCase();
+
+    const { data, error } = await supabase.auth.signInWithPassword({ 
+      email: cleanEmail, 
+      password 
+    });
     
     if (error) {
       console.error("❌ Login error:", error.message);
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
-    const { data: profile } = await supabase.from("profiles").select("*").eq("id", data.user.id).single();
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", data.user.id)
+      .single();
     
     if (!profile?.email_verified) {
       const otp = generateOTP(6);
+      console.log("🔢 Generated OTP for login:", otp);
+      
       await supabase.from("otp_verifications").insert({
         user_id: data.user.id,
-        email,
+        email: cleanEmail,
         otp_code: otp,
         otp_type: "email_verification",
         expires_at: getOTPExpiry(10),
       });
-      await sendOTPEmail(email, otp, "verification");
-      console.log("⚠️ Login blocked - email not verified:", email);
-      return res.status(403).json({ 
-        message: "Please verify your email first. We've sent you a new OTP.",
+      
+      await sendOTPEmail(cleanEmail, otp, "verification");
+      console.log("⚠️ Login blocked - email not verified:", cleanEmail);
+      
+      // Return 200 with requiresVerification flag (NOT 403)
+      return res.status(200).json({ 
+        success: false,
         requiresVerification: true,
-        email 
+        email: cleanEmail,
+        message: "Please verify your email first. We've sent you a new OTP."
       });
     }
 
@@ -313,8 +328,12 @@ router.post("/login", authLimiter, async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    console.log("✅ Login successful:", email);
-    res.json({ token, user: { ...data.user, ...profile } });
+    console.log("✅ Login successful:", cleanEmail);
+    res.json({ 
+      success: true,
+      token, 
+      user: { ...data.user, ...profile } 
+    });
   } catch (e) {
     console.error("💥 Login error:", e);
     res.status(500).json({ message: "Login failed. Please try again." });

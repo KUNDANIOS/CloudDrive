@@ -1,26 +1,32 @@
 'use client';
 
-import React, { Suspense, useState } from 'react';
+import React, { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AuthCard } from '@/components/auth/AuthCard';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { authApi } from '@/lib/api/auth';
 import { useAuthStore } from '@/lib/store/authStore';
-import { Mail, RefreshCw } from 'lucide-react';
+import { Mail } from 'lucide-react';
+import Cookies from 'js-cookie';
 
 function VerifyEmailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { setUser, setToken } = useAuthStore();
+  const { setUser } = useAuthStore();
   
   const emailParam = searchParams.get('email') || '';
   const [email, setEmail] = useState(emailParam);
   const [otp, setOTP] = useState('');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
+
+  useEffect(() => {
+    if (emailParam) {
+      setEmail(emailParam);
+    }
+  }, [emailParam]);
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,18 +34,25 @@ function VerifyEmailContent() {
     setLoading(true);
 
     try {
+      console.log('🔍 Verifying email:', email, 'OTP:', otp);
       const response = await authApi.verifyEmail(email, otp);
       
+      console.log('✅ Verification successful:', response);
+      
       // Store auth data
-      localStorage.setItem('token', response.token);
-      localStorage.setItem('user', JSON.stringify(response.user));
-      setToken(response.token);
-      setUser(response.user);
+      if (response.token) {
+        Cookies.set('token', response.token, { expires: 7 });
+        localStorage.setItem('token', response.token);
+        if (response.user) {
+          localStorage.setItem('user', JSON.stringify(response.user));
+          setUser(response.user);
+        }
+      }
 
-      setSuccess('Email verified successfully!');
-      setTimeout(() => router.push('/dashboard'), 1500);
+      router.push('/dashboard');
     } catch (err: any) {
-      setError(err.message || 'Invalid OTP');
+      console.error('❌ Verification failed:', err);
+      setError(err.message || 'Invalid OTP. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -47,13 +60,11 @@ function VerifyEmailContent() {
 
   const handleResend = async () => {
     setError('');
-    setSuccess('');
     setResending(true);
 
     try {
       await authApi.resendEmailOTP(email);
-      setSuccess('OTP sent! Check your email.');
-      setTimeout(() => setSuccess(''), 3000);
+      alert('New OTP sent to your email!');
     } catch (err: any) {
       setError(err.message || 'Failed to resend OTP');
     } finally {
@@ -73,20 +84,18 @@ function VerifyEmailContent() {
           </div>
         )}
 
-        {success && (
-          <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-sm text-green-600 dark:text-green-400">
-            {success}
-          </div>
-        )}
-
-        <Input
-          type="email"
-          label="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          leftIcon={<Mail className="w-5 h-5" />}
-          disabled
-        />
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Email
+          </label>
+          <Input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            readOnly={!!emailParam}
+            required
+          />
+        </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -98,8 +107,9 @@ function VerifyEmailContent() {
             value={otp}
             onChange={(e) => setOTP(e.target.value.replace(/\D/g, '').slice(0, 6))}
             maxLength={6}
+            className="text-center text-2xl tracking-widest font-bold"
             autoFocus
-            className="text-center text-2xl tracking-widest"
+            required
           />
         </div>
 
@@ -107,17 +117,14 @@ function VerifyEmailContent() {
           Verify Email
         </Button>
 
-        <div className="text-center">
-          <button
-            type="button"
-            onClick={handleResend}
-            disabled={resending}
-            className="inline-flex items-center text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 mr-1 ${resending ? 'animate-spin' : ''}`} />
-            Resend Code
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={handleResend}
+          disabled={resending}
+          className="w-full text-center text-sm text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          {resending ? 'Sending...' : '🔄 Resend Code'}
+        </button>
       </form>
     </AuthCard>
   );
