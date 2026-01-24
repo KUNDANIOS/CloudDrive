@@ -36,16 +36,13 @@ router.post("/register", authLimiter, async (req, res) => {
       return res.status(400).json({ message: "Email, password, and name are required" });
     }
 
-    // Clean and normalize email
     const cleanEmail = String(email).trim().toLowerCase();
 
-    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(cleanEmail)) {
       return res.status(400).json({ message: "Invalid email format" });
     }
 
-    // Validate password strength
     if (password.length < 8) {
       return res.status(400).json({ message: "Password must be at least 8 characters" });
     }
@@ -69,28 +66,49 @@ router.post("/register", authLimiter, async (req, res) => {
       phone_verified: false,
     });
 
-    // Delete any existing OTP records for this email
-    await supabase
+    // ✅ FIX: Delete ALL OTP records (both verified and unverified)
+    console.log("🗑️ Deleting all old OTP records...");
+    const { error: deleteError } = await supabase
       .from("otp_verifications")
       .delete()
       .eq("email", cleanEmail)
       .eq("otp_type", "email_verification");
+    // ⚠️ REMOVED .eq("verified", false) to delete ALL records
+    
+    if (deleteError) {
+      console.error("⚠️ Delete error (non-critical):", deleteError);
+    } else {
+      console.log("✅ Old OTP records deleted");
+    }
 
     const otp = generateOTP(6);
     console.log("🔢 Generated OTP:", otp, "for:", cleanEmail);
     
-    const { error: otpError } = await supabase.from("otp_verifications").insert({
-      user_id: authData.user.id,
-      email: cleanEmail,
-      otp_code: otp,
-      otp_type: "email_verification",
-      verified: false,
-      expires_at: getOTPExpiry(10),
-    });
+    const { data: insertedOtp, error: otpError } = await supabase
+      .from("otp_verifications")
+      .insert({
+        user_id: authData.user.id,
+        email: cleanEmail,
+        otp_code: otp,
+        otp_type: "email_verification",
+        verified: false,
+        expires_at: getOTPExpiry(10),
+      })
+      .select()
+      .single();
 
     if (otpError) {
       console.error("❌ OTP insert error:", otpError);
+      return res.status(500).json({ message: "Failed to generate OTP" });
     }
+
+    console.log("✅ OTP saved to database:", insertedOtp.id);
+    console.log("📊 OTP details:", {
+      id: insertedOtp.id,
+      otp_code: insertedOtp.otp_code,
+      verified: insertedOtp.verified,
+      expires_at: insertedOtp.expires_at
+    });
 
     await sendOTPEmail(cleanEmail, otp, "verification");
     console.log("✅ User registered:", authData.user.id);
@@ -119,7 +137,6 @@ router.post("/verify-email", authLimiter, async (req, res) => {
       return res.status(400).json({ message: "Email and OTP are required" });
     }
 
-    // Clean inputs
     const cleanOTP = String(otp).trim();
     const cleanEmail = String(email).trim().toLowerCase();
 
@@ -135,6 +152,7 @@ router.post("/verify-email", authLimiter, async (req, res) => {
       .from("otp_verifications")
       .select("*")
       .eq("email", cleanEmail)
+      .eq("otp_type", "email_verification")
       .order("created_at", { ascending: false });
 
     console.log("📊 All OTP records for email:", allOtpRecords?.length || 0);
@@ -165,10 +183,11 @@ router.post("/verify-email", authLimiter, async (req, res) => {
 
     console.log("📋 Found unverified OTP records:", otpRecords?.length || 0);
 
-    // Check if we got any records
     if (!otpRecords || otpRecords.length === 0) {
       console.log("⚠️ No unverified OTP found for email:", cleanEmail);
-      return res.status(400).json({ message: "Invalid OTP or OTP already used" });
+      return res.status(400).json({ 
+        message: "Invalid OTP or OTP already used. Please request a new code." 
+      });
     }
 
     const otpData = otpRecords[0];
@@ -313,13 +332,20 @@ router.post("/resend-email-otp", otpLimiter, async (req, res) => {
       return res.status(400).json({ message: "Email already verified" });
     }
 
-    // DELETE old OTP records for this email (including verified ones)
-    console.log("🗑️ Deleting old OTP records...");
-    await supabase
+    // ✅ FIX: Delete ALL OTP records (both verified and unverified)
+    console.log("🗑️ Deleting ALL old OTP records...");
+    const { error: deleteError } = await supabase
       .from("otp_verifications")
       .delete()
       .eq("email", cleanEmail)
       .eq("otp_type", "email_verification");
+    // ⚠️ REMOVED .eq("verified", false) to delete ALL records
+
+    if (deleteError) {
+      console.error("⚠️ Delete error (non-critical):", deleteError);
+    } else {
+      console.log("✅ All old OTP records deleted");
+    }
 
     const otp = generateOTP(6);
     console.log("🔢 Generated new OTP:", otp, "for:", cleanEmail);
@@ -344,6 +370,12 @@ router.post("/resend-email-otp", otpLimiter, async (req, res) => {
     }
 
     console.log("✅ OTP saved to database:", insertedOtp.id);
+    console.log("📊 OTP details:", {
+      id: insertedOtp.id,
+      otp_code: insertedOtp.otp_code,
+      verified: insertedOtp.verified,
+      expires_at: insertedOtp.expires_at
+    });
 
     await sendOTPEmail(cleanEmail, otp, "verification");
     console.log("✅ OTP resent to:", cleanEmail);
@@ -384,30 +416,46 @@ router.post("/login", authLimiter, async (req, res) => {
       .single();
     
     if (!profile?.email_verified) {
-      // DELETE old OTP records
-      console.log("🗑️ Deleting old OTP records for unverified user...");
-      await supabase
+      // ✅ FIX: Delete ALL old OTP records (both verified and unverified)
+      console.log("🗑️ Deleting ALL old OTP records for unverified user...");
+      const { error: deleteError } = await supabase
         .from("otp_verifications")
         .delete()
         .eq("email", cleanEmail)
         .eq("otp_type", "email_verification");
+      // ⚠️ REMOVED .eq("verified", false) to delete ALL records
+
+      if (deleteError) {
+        console.error("⚠️ Delete error (non-critical):", deleteError);
+      } else {
+        console.log("✅ All old OTP records deleted");
+      }
 
       const otp = generateOTP(6);
       console.log("🔢 Generated OTP for login:", otp);
       
-      await supabase.from("otp_verifications").insert({
-        user_id: data.user.id,
-        email: cleanEmail,
-        otp_code: otp,
-        otp_type: "email_verification",
-        verified: false,
-        expires_at: getOTPExpiry(10),
-      });
+      const { data: insertedOtp, error: insertError } = await supabase
+        .from("otp_verifications")
+        .insert({
+          user_id: data.user.id,
+          email: cleanEmail,
+          otp_code: otp,
+          otp_type: "email_verification",
+          verified: false,
+          expires_at: getOTPExpiry(10),
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error("❌ OTP insert error:", insertError);
+      } else {
+        console.log("✅ OTP saved:", insertedOtp.id);
+      }
       
       await sendOTPEmail(cleanEmail, otp, "verification");
       console.log("⚠️ Login blocked - email not verified:", cleanEmail);
       
-      // Return 200 with requiresVerification flag (NOT 403)
       return res.status(200).json({ 
         success: false,
         requiresVerification: true,
@@ -471,7 +519,7 @@ router.post("/forgot-password", otpLimiter, async (req, res) => {
       .insert({
         user_id: user.id,
         token,
-        expires_at: new Date(Date.now() + 3600000), // 1 hour
+        expires_at: new Date(Date.now() + 3600000),
       });
     
     if (insertError) {
