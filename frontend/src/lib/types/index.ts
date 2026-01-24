@@ -76,6 +76,8 @@ export interface PasswordResetToken {
 
 // File types
 export interface FileItem {
+  is_folder: any;
+  is_starred: any;
   id: string;
   name: string;
   type: 'file' | 'folder';

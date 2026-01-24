@@ -125,7 +125,7 @@ router.get("/search", protect, async (req, res) => {
     const { data, error } = await supabase
       .from("files")
       .select("*")
-      .eq("owner_id", req.user.id)
+      .eq("owner_id", req.user.id) 
       .eq("is_deleted", false)
       .ilike("name", `%${q}%`);
 
