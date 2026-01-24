@@ -27,13 +27,13 @@ const app = express();
    MIDDLEWARE
 ========================= */
 
-// CORS Configuration - Allow multiple origins including Vercel preview URLs
+// CORS Configuration - Allow multiple origins
 const allowedOrigins = [
   'https://cloud-drive-five-lyart.vercel.app', // Production Vercel
   'http://localhost:3000', // Local development
   'http://localhost:5173', // Vite development
   process.env.FRONTEND_URL // Additional custom frontend URL
-].filter(Boolean);
+].filter(Boolean); // Remove undefined values
 
 app.use(
   cors({
@@ -42,12 +42,14 @@ app.use(
       if (!origin) return callback(null, true);
       
       // Allow all Vercel preview URLs (*.vercel.app)
-      if (origin.includes('.vercel.app')) {
+      if (origin && origin.includes('.vercel.app')) {
+        console.log(`✅ CORS allowed Vercel origin: ${origin}`);
         return callback(null, true);
       }
       
       // Check if origin is in allowed list
       if (allowedOrigins.includes(origin)) {
+        console.log(`✅ CORS allowed origin: ${origin}`);
         return callback(null, true);
       }
       
