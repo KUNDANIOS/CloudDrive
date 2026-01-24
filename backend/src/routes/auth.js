@@ -51,7 +51,7 @@ router.post("/register", authLimiter, async (req, res) => {
     }
 
     const { data: authData, error } = await supabase.auth.admin.createUser({
-      email: cleanEmail,  // Use cleaned email
+      email: cleanEmail,
       password,
       email_confirm: false,
     });
@@ -69,14 +69,22 @@ router.post("/register", authLimiter, async (req, res) => {
       phone_verified: false,
     });
 
+    // Delete any existing OTP records for this email
+    await supabase
+      .from("otp_verifications")
+      .delete()
+      .eq("email", cleanEmail)
+      .eq("otp_type", "email_verification");
+
     const otp = generateOTP(6);
-    console.log("🔢 Generated OTP:", otp, "for:", cleanEmail);  // Added logging
+    console.log("🔢 Generated OTP:", otp, "for:", cleanEmail);
     
     const { error: otpError } = await supabase.from("otp_verifications").insert({
       user_id: authData.user.id,
-      email: cleanEmail,  // Use cleaned email
+      email: cleanEmail,
       otp_code: otp,
       otp_type: "email_verification",
+      verified: false,
       expires_at: getOTPExpiry(10),
     });
 
@@ -84,13 +92,13 @@ router.post("/register", authLimiter, async (req, res) => {
       console.error("❌ OTP insert error:", otpError);
     }
 
-    await sendOTPEmail(cleanEmail, otp, "verification");  // Use cleaned email
+    await sendOTPEmail(cleanEmail, otp, "verification");
     console.log("✅ User registered:", authData.user.id);
 
     res.json({
       message: "Registered! Check your email for OTP.",
       userId: authData.user.id,
-      email: cleanEmail,  // Return cleaned email
+      email: cleanEmail,
       requiresVerification: true,
     });
   } catch (e) {
@@ -98,10 +106,13 @@ router.post("/register", authLimiter, async (req, res) => {
     res.status(500).json({ message: "Registration failed. Please try again." });
   }
 });
+
 /* ==================== VERIFY EMAIL ==================== */
 router.post("/verify-email", authLimiter, async (req, res) => {
   try {
     console.log("✉️ Email verification request");
+    console.log("📦 Request body:", req.body);
+    
     const { email, otp } = req.body;
     
     if (!email || !otp) {
@@ -112,9 +123,32 @@ router.post("/verify-email", authLimiter, async (req, res) => {
     const cleanOTP = String(otp).trim();
     const cleanEmail = String(email).trim().toLowerCase();
 
-    console.log("🔍 Verifying OTP:", { email: cleanEmail, otp: cleanOTP });
+    console.log("🔍 Verifying OTP:", { 
+      originalEmail: email,
+      cleanEmail: cleanEmail, 
+      originalOTP: otp,
+      cleanOTP: cleanOTP 
+    });
 
-    // Query WITHOUT .single() to avoid errors when no data exists
+    // First, check if there are ANY OTP records for this email
+    const { data: allOtpRecords } = await supabase
+      .from("otp_verifications")
+      .select("*")
+      .eq("email", cleanEmail)
+      .order("created_at", { ascending: false });
+
+    console.log("📊 All OTP records for email:", allOtpRecords?.length || 0);
+    if (allOtpRecords && allOtpRecords.length > 0) {
+      console.log("📋 Latest OTP record:", {
+        id: allOtpRecords[0].id,
+        otp_code: allOtpRecords[0].otp_code,
+        verified: allOtpRecords[0].verified,
+        expires_at: allOtpRecords[0].expires_at,
+        created_at: allOtpRecords[0].created_at
+      });
+    }
+
+    // Query for unverified OTPs
     const { data: otpRecords, error: otpError } = await supabase
       .from("otp_verifications")
       .select("*")
@@ -129,32 +163,47 @@ router.post("/verify-email", authLimiter, async (req, res) => {
       return res.status(500).json({ message: "Database error. Please try again." });
     }
 
-    console.log("📋 Found OTP records:", otpRecords?.length || 0);
+    console.log("📋 Found unverified OTP records:", otpRecords?.length || 0);
 
     // Check if we got any records
     if (!otpRecords || otpRecords.length === 0) {
-      console.log("⚠️ No OTP found for email:", cleanEmail);
+      console.log("⚠️ No unverified OTP found for email:", cleanEmail);
       return res.status(400).json({ message: "Invalid OTP or OTP already used" });
     }
 
     const otpData = otpRecords[0];
-    console.log("📄 OTP Data:", {
+    console.log("📄 OTP Data found:", {
       id: otpData.id,
       stored_otp: otpData.otp_code,
       received_otp: cleanOTP,
       expires_at: otpData.expires_at,
-      created_at: otpData.created_at
+      created_at: otpData.created_at,
+      user_id: otpData.user_id
     });
 
     // Check expiration
-    if (new Date() > new Date(otpData.expires_at)) {
+    const now = new Date();
+    const expiresAt = new Date(otpData.expires_at);
+    console.log("⏰ Time check:", { 
+      now: now.toISOString(), 
+      expires: expiresAt.toISOString(),
+      expired: now > expiresAt 
+    });
+
+    if (now > expiresAt) {
       console.log("⏰ OTP expired");
       return res.status(400).json({ message: "OTP expired. Please request a new one." });
     }
 
     // Compare OTPs
     const storedOTP = String(otpData.otp_code).trim();
-    console.log("🔐 Comparing:", { stored: storedOTP, received: cleanOTP, match: storedOTP === cleanOTP });
+    console.log("🔐 OTP Comparison:", { 
+      stored: storedOTP, 
+      received: cleanOTP, 
+      match: storedOTP === cleanOTP,
+      storedType: typeof storedOTP,
+      receivedType: typeof cleanOTP
+    });
 
     if (storedOTP !== cleanOTP) {
       console.log("❌ OTP mismatch");
@@ -174,16 +223,31 @@ router.post("/verify-email", authLimiter, async (req, res) => {
       return res.status(500).json({ message: "Failed to verify OTP" });
     }
 
+    console.log("✅ OTP record marked as verified");
+
     // Update profile
-    await supabase
+    const { error: profileError } = await supabase
       .from("profiles")
       .update({ email_verified: true })
       .eq("id", otpData.user_id);
 
+    if (profileError) {
+      console.error("❌ Profile update error:", profileError);
+    } else {
+      console.log("✅ Profile updated");
+    }
+
     // Update auth user
-    await supabase.auth.admin.updateUserById(otpData.user_id, { 
-      email_confirm: true 
-    });
+    const { error: authError } = await supabase.auth.admin.updateUserById(
+      otpData.user_id, 
+      { email_confirm: true }
+    );
+
+    if (authError) {
+      console.error("❌ Auth update error:", authError);
+    } else {
+      console.log("✅ Auth user updated");
+    }
 
     // Get user data
     const { data: userData, error: userError } = await supabase.auth.admin.getUserById(otpData.user_id);
@@ -192,6 +256,8 @@ router.post("/verify-email", authLimiter, async (req, res) => {
       console.error("❌ User fetch error:", userError);
       return res.status(500).json({ message: "Failed to get user data" });
     }
+
+    console.log("✅ User data fetched");
 
     // Generate token
     const token = jwt.sign(
@@ -224,6 +290,7 @@ router.post("/resend-email-otp", otpLimiter, async (req, res) => {
     }
 
     const cleanEmail = String(email).trim().toLowerCase();
+    console.log("📧 Looking for user with email:", cleanEmail);
 
     const { data: users } = await supabase.auth.admin.listUsers();
     const user = users.users.find((u) => u.email?.toLowerCase() === cleanEmail);
@@ -233,6 +300,8 @@ router.post("/resend-email-otp", otpLimiter, async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    console.log("✅ User found:", user.id);
+
     const { data: profile } = await supabase
       .from("profiles")
       .select("*")
@@ -240,26 +309,41 @@ router.post("/resend-email-otp", otpLimiter, async (req, res) => {
       .single();
     
     if (profile?.email_verified) {
+      console.log("⚠️ Email already verified");
       return res.status(400).json({ message: "Email already verified" });
     }
+
+    // DELETE old OTP records for this email (including verified ones)
+    console.log("🗑️ Deleting old OTP records...");
+    await supabase
+      .from("otp_verifications")
+      .delete()
+      .eq("email", cleanEmail)
+      .eq("otp_type", "email_verification");
 
     const otp = generateOTP(6);
     console.log("🔢 Generated new OTP:", otp, "for:", cleanEmail);
 
-    const { error: insertError } = await supabase
+    // Insert new OTP
+    const { data: insertedOtp, error: insertError } = await supabase
       .from("otp_verifications")
       .insert({
         user_id: user.id,
         email: cleanEmail,
         otp_code: otp,
         otp_type: "email_verification",
+        verified: false,
         expires_at: getOTPExpiry(10),
-      });
+      })
+      .select()
+      .single();
 
     if (insertError) {
       console.error("❌ Insert error:", insertError);
       return res.status(500).json({ message: "Failed to generate OTP" });
     }
+
+    console.log("✅ OTP saved to database:", insertedOtp.id);
 
     await sendOTPEmail(cleanEmail, otp, "verification");
     console.log("✅ OTP resent to:", cleanEmail);
@@ -270,6 +354,7 @@ router.post("/resend-email-otp", otpLimiter, async (req, res) => {
     res.status(500).json({ message: "Failed to resend OTP. Please try again." });
   }
 });
+
 /* ==================== LOGIN ==================== */
 router.post("/login", authLimiter, async (req, res) => {
   try {
@@ -299,6 +384,14 @@ router.post("/login", authLimiter, async (req, res) => {
       .single();
     
     if (!profile?.email_verified) {
+      // DELETE old OTP records
+      console.log("🗑️ Deleting old OTP records for unverified user...");
+      await supabase
+        .from("otp_verifications")
+        .delete()
+        .eq("email", cleanEmail)
+        .eq("otp_type", "email_verification");
+
       const otp = generateOTP(6);
       console.log("🔢 Generated OTP for login:", otp);
       
@@ -307,6 +400,7 @@ router.post("/login", authLimiter, async (req, res) => {
         email: cleanEmail,
         otp_code: otp,
         otp_type: "email_verification",
+        verified: false,
         expires_at: getOTPExpiry(10),
       });
       
@@ -349,22 +443,21 @@ router.post("/forgot-password", otpLimiter, async (req, res) => {
     if (!email) {
       return res.status(400).json({ message: "Email is required" });
     }
-    
-    console.log("🔍 Looking up user:", email);
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    console.log("🔍 Looking up user:", cleanEmail);
     
     const { data: users, error: listError } = await supabase.auth.admin.listUsers();
     
     if (listError) {
       console.error("❌ Error listing users:", listError);
-      // Don't reveal the error to prevent user enumeration
       return res.json({ message: "If an account exists, a reset link has been sent" });
     }
     
-    const user = users.users.find((u) => u.email === email);
+    const user = users.users.find((u) => u.email?.toLowerCase() === cleanEmail);
     
     if (!user) {
       console.log("⚠️ User not found, but returning success for security");
-      // Always return success to prevent user enumeration
       return res.json({ message: "If an account exists, a reset link has been sent" });
     }
     
@@ -391,9 +484,9 @@ router.post("/forgot-password", otpLimiter, async (req, res) => {
     const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
     console.log("🔗 Reset link generated");
     
-    await sendPasswordResetEmail(email, resetLink);
+    await sendPasswordResetEmail(cleanEmail, resetLink);
     
-    console.log("✅ Password reset email sent to:", email);
+    console.log("✅ Password reset email sent to:", cleanEmail);
     
     res.json({ message: "If an account exists, a reset link has been sent" });
   } catch (e) {
@@ -426,7 +519,6 @@ router.post("/reset-password", authLimiter, async (req, res) => {
     if (fetchError || !resetToken) {
       console.error("❌ Token not found or already used");
       
-      // Check if token was already used
       const { data: usedToken } = await supabase
         .from("password_reset_tokens")
         .select("*")
@@ -451,12 +543,11 @@ router.post("/reset-password", authLimiter, async (req, res) => {
       });
     }
 
-    // Update user's password AND confirm email
     const { error: updateError } = await supabase.auth.admin.updateUserById(
       resetToken.user_id,
       { 
         password: password,
-        email_confirm: true  // Confirm email when resetting password
+        email_confirm: true
       }
     );
 
@@ -465,13 +556,11 @@ router.post("/reset-password", authLimiter, async (req, res) => {
       return res.status(500).json({ message: "Failed to update password. Please try again." });
     }
 
-    // Also update profile to mark email as verified
     await supabase
       .from("profiles")
       .update({ email_verified: true })
       .eq("id", resetToken.user_id);
 
-    // Mark token as used
     await supabase
       .from("password_reset_tokens")
       .update({ used: true })
@@ -510,7 +599,6 @@ router.get("/me", protect, async (req, res) => {
 
 /* ==================== ADMIN: FIX UNVERIFIED EMAILS (DEV ONLY) ==================== */
 router.post("/admin/fix-unverified-users", async (req, res) => {
-  // Only allow in development
   if (process.env.NODE_ENV !== 'development') {
     return res.status(403).json({ message: "This endpoint is only available in development" });
   }
@@ -518,18 +606,15 @@ router.post("/admin/fix-unverified-users", async (req, res) => {
   try {
     console.log("🔧 Fixing unverified users...");
 
-    // Get all users with unconfirmed emails
     const { data: users } = await supabase.auth.admin.listUsers();
     
     let fixed = 0;
     for (const user of users.users) {
       if (!user.email_confirmed_at) {
-        // Confirm email in auth.users
         await supabase.auth.admin.updateUserById(user.id, {
           email_confirm: true
         });
         
-        // Update profile
         await supabase
           .from("profiles")
           .update({ email_verified: true })
@@ -548,6 +633,33 @@ router.post("/admin/fix-unverified-users", async (req, res) => {
   } catch (e) {
     console.error("💥 Fix unverified users error:", e);
     res.status(500).json({ message: "Failed to fix users" });
+  }
+});
+
+/* ==================== ADMIN: CLEANUP VERIFIED OTPs (DEV ONLY) ==================== */
+router.post("/admin/cleanup-verified-otps", async (req, res) => {
+  if (process.env.NODE_ENV !== 'development') {
+    return res.status(403).json({ message: "Only available in development" });
+  }
+
+  try {
+    console.log("🧹 Cleaning up verified OTP records...");
+
+    const { error } = await supabase
+      .from("otp_verifications")
+      .delete()
+      .eq("verified", true);
+
+    if (error) {
+      console.error("❌ Cleanup error:", error);
+      return res.status(500).json({ error });
+    }
+
+    console.log("✅ Cleanup complete");
+    res.json({ message: "Verified OTP records cleaned up" });
+  } catch (e) {
+    console.error("💥 Error:", e);
+    res.status(500).json({ error: e.message });
   }
 });
 
