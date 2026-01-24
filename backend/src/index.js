@@ -27,11 +27,13 @@ const app = express();
 
 // CORS Configuration - Allow multiple origins
 const allowedOrigins = [
-  'https://cloud-drive-five-lyart.vercel.app', // Production Vercel
-  'http://localhost:3000', // Local development
-  'http://localhost:5173', // Vite development
-  process.env.FRONTEND_URL // Additional custom frontend URL
-].filter(Boolean); // Remove undefined values
+  "https://clouddrive.store",
+  "https://www.clouddrive.store",
+  'https://cloud-drive-five-lyart.vercel.app', 
+  'http://localhost:3000', 
+  'http://localhost:5173',
+  process.env.FRONTEND_URL  
+].filter(Boolean); 
 
 app.use(
   cors({
