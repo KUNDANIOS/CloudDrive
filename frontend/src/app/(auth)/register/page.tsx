@@ -11,7 +11,6 @@ import { Mail, Lock, User, Phone } from 'lucide-react';
 
 export default function RegisterPage() {
   const router = useRouter();
-
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -37,15 +36,15 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await authApi.register({
-        name,
-        email,
+      const response = await authApi.register({ 
+        name, 
+        email, 
         password,
-        phone: phone || undefined,
+        phone: phone || undefined 
       });
 
-      // ✅ Supabase sends verification email automatically
-      router.push('/verify-email');
+      // Redirect to email verification
+      router.push(`/verify-email?email=${encodeURIComponent(email)}`);
     } catch (err: any) {
       setError(err.message || 'Failed to create account');
     } finally {
@@ -120,10 +119,7 @@ export default function RegisterPage() {
 
         <div className="text-center text-sm text-gray-600 dark:text-gray-400">
           Already have an account?{' '}
-          <Link
-            href="/login"
-            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
-          >
+          <Link href="/login" className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium">
             Sign in
           </Link>
         </div>
