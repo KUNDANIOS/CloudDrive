@@ -7,14 +7,12 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { authApi } from '@/lib/api/auth';
 import { useAuthStore } from '@/lib/store/authStore';
-import { Mail, Lock } from 'lucide-react';
 import Link from 'next/link';
-import Cookies from 'js-cookie';
 
 export default function LoginPage() {
   const router = useRouter();
   const { setUser } = useAuthStore();
-  
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -29,27 +27,17 @@ export default function LoginPage() {
 
     try {
       const response = await authApi.login(formData);
-      
-      // Successful login
-      if (response.token && response.user) {
-        Cookies.set('token', response.token, { expires: 7 });
-        localStorage.setItem('token', response.token);
-        localStorage.setItem('user', JSON.stringify(response.user));
-        setUser(response.user);
-        router.push('/dashboard');
-      }
+
+      // ✅ Supabase session is already stored internally
+      setUser(response.user);
+      router.push('/dashboard');
     } catch (err: any) {
-      console.error('Login error caught:', err);
-      
-      // Check if verification is required
+      // 🚨 Email not verified
       if (err.requiresVerification) {
-        console.log('Redirecting to verification page');
-        const email = err.email || formData.email;
-        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
-        return; // Don't show error, just redirect
+        router.push('/verify-email');
+        return;
       }
-      
-      // Show other errors
+
       setError(err.message || 'Login failed. Please try again.');
     } finally {
       setLoading(false);
@@ -76,7 +64,9 @@ export default function LoginPage() {
             type="email"
             placeholder="Enter your email"
             value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, email: e.target.value })
+            }
             required
           />
         </div>
@@ -89,7 +79,9 @@ export default function LoginPage() {
             type="password"
             placeholder="Enter your password"
             value={formData.password}
-            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, password: e.target.value })
+            }
             required
           />
         </div>
@@ -108,8 +100,11 @@ export default function LoginPage() {
         </Button>
 
         <p className="text-center text-sm text-gray-600 dark:text-gray-400">
-          Don't have an account?{' '}
-          <Link href="/register" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
+          Don&apos;t have an account?{' '}
+          <Link
+            href="/register"
+            className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+          >
             Sign up
           </Link>
         </p>

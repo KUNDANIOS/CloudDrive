@@ -96,7 +96,7 @@ export const StorageIndicator: React.FC = () => {
         {storagePercent >= 90 && (
           <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
             <p className="text-xs text-red-600 dark:text-red-400">
-              ⚠️ Storage almost full. Consider upgrading your plan.
+               Storage almost full. Consider upgrading your plan.
             </p>
           </div>
         )}

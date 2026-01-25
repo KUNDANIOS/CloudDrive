@@ -168,7 +168,7 @@ export const Sidebar: React.FC = () => {
             </p>
             {storagePercent >= 90 && (
               <p className="text-xs text-red-600 dark:text-red-400 font-medium">
-                ⚠️ Storage almost full!
+                 Storage almost full!
               </p>
             )}
           </div>
