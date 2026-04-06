@@ -5,7 +5,7 @@ A full-stack cloud storage application with file management, sharing capabilitie
 ![TypeScript](https://img.shields.io/badge/TypeScript-77.2%25-blue)
 ![JavaScript](https://img.shields.io/badge/JavaScript-22.6%25-yellow)
 ![CSS](https://img.shields.io/badge/CSS-0.2%25-purple)
-
+  
 ## ✨ Features
 
 - 📁 **File & Folder Management** - Upload, organize, and manage your files
