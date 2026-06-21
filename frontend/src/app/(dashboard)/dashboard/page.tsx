@@ -1,52 +1,53 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Breadcrumb } from '@/components/dashboard/Breadcrumb';
 import { FileGrid } from '@/components/dashboard/FileGrid';
 import { filesApi } from '@/lib/api/files';
 import { foldersApi } from '@/lib/api/folders';
 import { FileItem, Folder } from '@/lib/types';
 import { useFileStore } from '@/lib/store/fileStore';
-import { FolderPlus, AlertCircle } from 'lucide-react';
+import { FolderPlus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useUIStore } from '@/lib/store/uiStore';
 import { UploadButton } from '@/components/dashboard/UploadButton';
 
 export default function DashboardPage() {
+  const [localFiles, setLocalFiles] = useState<FileItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
 
-  // Use files directly from store so search filtering in FileGrid works
-  const { files, setFiles, setCurrentFolder, refreshTrigger } = useFileStore();
+  const { setCurrentFolder, refreshTrigger, searchQuery } = useFileStore();
   const { openModal } = useUIStore();
+
+  // Filter files locally using searchQuery from store
+  const filteredFiles = useMemo(() => {
+    if (!searchQuery.trim()) return localFiles;
+    const q = searchQuery.toLowerCase().trim();
+    return localFiles.filter((f) => f.name.toLowerCase().includes(q));
+  }, [localFiles, searchQuery]);
 
   const loadFiles = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      console.log('📁 Dashboard: Loading files for folder:', currentFolderId || 'root');
       const items = await foldersApi.getFolderContents(currentFolderId);
-      console.log('✅ Dashboard: Loaded', items.length, 'items');
-      setFiles(items); // set into store — FileGrid reads from store via searchQuery
+      setLocalFiles(items);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to load files';
-      console.error('❌ Dashboard: Failed to load files:', error);
-      setError(errorMessage);
-      setFiles([]);
+      setError(error instanceof Error ? error.message : 'Failed to load files');
+      setLocalFiles([]);
     } finally {
       setIsLoading(false);
     }
-  }, [currentFolderId, setFiles]);
+  }, [currentFolderId]);
 
   useEffect(() => {
     loadFiles();
   }, [loadFiles]);
 
   useEffect(() => {
-    if (refreshTrigger > 0) {
-      loadFiles();
-    }
+    if (refreshTrigger > 0) loadFiles();
   }, [refreshTrigger, loadFiles]);
 
   const handleFileOpen = async (file: FileItem) => {
@@ -129,18 +130,13 @@ export default function DashboardPage() {
             <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
             <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error}</p>
           </div>
-          <button
-            onClick={() => setError(null)}
-            className="text-red-600 dark:text-red-400 hover:text-red-800"
-          >
-            ✕
-          </button>
+          <button onClick={() => setError(null)} className="text-red-600 hover:text-red-800">✕</button>
         </div>
       )}
 
-      {/* Files Grid — uses store files so search works */}
+      {/* Pass filteredFiles directly — search handled here, not in FileGrid */}
       <FileGrid
-        files={files}
+        files={filteredFiles}
         isLoading={isLoading}
         onFileOpen={handleFileOpen}
         onStar={handleStar}
