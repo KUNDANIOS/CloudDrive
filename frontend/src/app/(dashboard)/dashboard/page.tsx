@@ -13,45 +13,38 @@ import { useUIStore } from '@/lib/store/uiStore';
 import { UploadButton } from '@/components/dashboard/UploadButton';
 
 export default function DashboardPage() {
-  const [files, setFiles] = useState<FileItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-  const { setFiles: setStoreFiles, setCurrentFolder, refreshTrigger } = useFileStore();
+
+  // Use files directly from store so search filtering in FileGrid works
+  const { files, setFiles, setCurrentFolder, refreshTrigger } = useFileStore();
   const { openModal } = useUIStore();
 
-  // Memoized load files function
   const loadFiles = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-    
     try {
       console.log('📁 Dashboard: Loading files for folder:', currentFolderId || 'root');
       const items = await foldersApi.getFolderContents(currentFolderId);
-      
       console.log('✅ Dashboard: Loaded', items.length, 'items');
-      setFiles(items);
-      setStoreFiles(items);
+      setFiles(items); // set into store — FileGrid reads from store via searchQuery
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load files';
       console.error('❌ Dashboard: Failed to load files:', error);
       setError(errorMessage);
       setFiles([]);
-      setStoreFiles([]);
     } finally {
       setIsLoading(false);
     }
-  }, [currentFolderId, setStoreFiles]);
+  }, [currentFolderId, setFiles]);
 
-  // Load files when folder changes
   useEffect(() => {
     loadFiles();
   }, [loadFiles]);
 
-  // Load files when refresh is triggered
   useEffect(() => {
     if (refreshTrigger > 0) {
-      console.log('🔄 Dashboard: Refresh triggered, count:', refreshTrigger);
       loadFiles();
     }
   }, [refreshTrigger, loadFiles]);
@@ -72,9 +65,7 @@ export default function DashboardPage() {
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Failed to download file';
-        console.error('Failed to download file:', error);
-        setError(errorMessage);
+        setError(error instanceof Error ? error.message : 'Failed to download file');
       }
     }
   };
@@ -84,15 +75,12 @@ export default function DashboardPage() {
       await filesApi.toggleStar(file.id);
       await loadFiles();
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to toggle star';
-      console.error('Failed to toggle star:', error);
-      setError(errorMessage);
+      setError(error instanceof Error ? error.message : 'Failed to toggle star');
     }
   };
 
   const handleDownload = async (file: FileItem) => {
     if (file.type === 'folder') return;
-    
     try {
       const response = await filesApi.downloadFile(file.id);
       const url = window.URL.createObjectURL(response);
@@ -104,14 +92,11 @@ export default function DashboardPage() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to download file';
-      console.error('Failed to download file:', error);
-      setError(errorMessage);
+      setError(error instanceof Error ? error.message : 'Failed to download file');
     }
   };
 
   const handleOperationSuccess = useCallback(() => {
-    console.log('✨ Dashboard: Operation success, reloading files');
     loadFiles();
   }, [loadFiles]);
 
@@ -126,8 +111,8 @@ export default function DashboardPage() {
           <Breadcrumb />
         </div>
         <div className="flex items-center space-x-3">
-          <UploadButton 
-            folderId={currentFolderId} 
+          <UploadButton
+            folderId={currentFolderId}
             onUploadComplete={handleOperationSuccess}
           />
           <Button onClick={() => openModal('createFolder')}>
@@ -141,26 +126,22 @@ export default function DashboardPage() {
       {error && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
           <div className="flex-1">
-            <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
-              Error
-            </h3>
-            <p className="text-sm text-red-700 dark:text-red-300 mt-1">
-              {error}
-            </p>
+            <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
+            <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error}</p>
           </div>
           <button
             onClick={() => setError(null)}
-            className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
+            className="text-red-600 dark:text-red-400 hover:text-red-800"
           >
             ✕
           </button>
         </div>
       )}
 
-      {/* Files Grid */}
-      <FileGrid 
-        files={files} 
-        isLoading={isLoading} 
+      {/* Files Grid — uses store files so search works */}
+      <FileGrid
+        files={files}
+        isLoading={isLoading}
         onFileOpen={handleFileOpen}
         onStar={handleStar}
         onDownload={handleDownload}
