@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { FileItem } from './FileItem';
 import { FileItem as FileItemType } from '@/lib/types';
 import { useFileStore } from '@/lib/store/fileStore';
@@ -16,16 +16,23 @@ interface FileGridProps {
   onOperationSuccess?: () => void;
 }
 
-export const FileGrid: React.FC<FileGridProps> = ({ 
-  files, 
-  isLoading, 
+export const FileGrid: React.FC<FileGridProps> = ({
+  files,
+  isLoading,
   onFileOpen,
   onStar,
   onDownload,
   onOperationSuccess,
 }) => {
-  const { selectedFiles, toggleFileSelection, viewMode } = useFileStore();
+  const { selectedFiles, toggleFileSelection, viewMode, searchQuery } = useFileStore();
   const { openModal } = useUIStore();
+
+  // Fast client-side filtering — no API call needed
+  const filteredFiles = useMemo(() => {
+    if (!searchQuery.trim()) return files;
+    const q = searchQuery.toLowerCase().trim();
+    return files.filter((f) => f.name.toLowerCase().includes(q));
+  }, [files, searchQuery]);
 
   if (isLoading) {
     return (
@@ -35,11 +42,20 @@ export const FileGrid: React.FC<FileGridProps> = ({
     );
   }
 
-  if (files.length === 0) {
+  if (filteredFiles.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-gray-500 dark:text-gray-400">
-        <p className="text-lg">No files or folders</p>
-        <p className="text-sm mt-2">Upload files or create folders to get started</p>
+        {searchQuery.trim() ? (
+          <>
+            <p className="text-lg">No results for "{searchQuery}"</p>
+            <p className="text-sm mt-2">Try a different search term</p>
+          </>
+        ) : (
+          <>
+            <p className="text-lg">No files or folders</p>
+            <p className="text-sm mt-2">Upload files or create folders to get started</p>
+          </>
+        )}
       </div>
     );
   }
@@ -47,7 +63,7 @@ export const FileGrid: React.FC<FileGridProps> = ({
   if (viewMode === 'list') {
     return (
       <div className="space-y-1">
-        {files.map((file) => (
+        {filteredFiles.map((file) => (
           <FileItem
             key={file.id}
             file={file}
@@ -58,12 +74,10 @@ export const FileGrid: React.FC<FileGridProps> = ({
             onStar={() => onStar?.(file)}
             onRename={() => {
               openModal('rename', file);
-              // Store callback for after rename
               (window as any).__operationSuccessCallback = onOperationSuccess;
             }}
             onDelete={() => {
               openModal('delete', file);
-              // Store callback for after delete
               (window as any).__operationSuccessCallback = onOperationSuccess;
             }}
             onShare={() => openModal('share', file)}
@@ -76,7 +90,7 @@ export const FileGrid: React.FC<FileGridProps> = ({
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-      {files.map((file) => (
+      {filteredFiles.map((file) => (
         <FileItem
           key={file.id}
           file={file}
