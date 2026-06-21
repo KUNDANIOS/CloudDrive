@@ -9,16 +9,22 @@ export const metadata: Metadata = {
   description: 'Secure cloud storage for all your files',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body
-        className={`${inter.className} bg-neutral-100 text-gray-900 min-h-screen`}
-      >
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                const dark = localStorage.getItem('darkMode');
+                if (dark === 'true') document.documentElement.classList.add('dark');
+              } catch {}
+            `,
+          }}
+        />
+      </head>
+      <body className={`${inter.className} bg-neutral-100 dark:bg-gray-900 text-gray-900 dark:text-white min-h-screen`}>
         {children}
       </body>
     </html>
