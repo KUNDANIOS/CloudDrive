@@ -21,7 +21,6 @@ export default function MyDrivePage() {
   } = useFileStore();
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load folder contents
   const loadFolderContents = async (folderId?: string | null) => {
     try {
       setIsLoading(true);
@@ -36,13 +35,11 @@ export default function MyDrivePage() {
     }
   };
 
-  // Initial load
   useEffect(() => {
     console.log('🎯 Initial load for folder:', currentFolder?.id);
     loadFolderContents(currentFolder?.id);
   }, [currentFolder?.id]);
 
-  // Watch for refresh trigger
   useEffect(() => {
     if (refreshTrigger > 0) {
       console.log('🔄 Refresh triggered, count:', refreshTrigger);
@@ -65,13 +62,8 @@ export default function MyDrivePage() {
         updatedAt: file.updatedAt,
       });
     } else {
-      // Handle file opening (download, preview, etc.)
       console.log('📂 Opening file:', file.name);
     }
-  };
-
-  const handleRefresh = () => {
-    loadFolderContents(currentFolder?.id);
   };
 
   if (isLoading && files.length === 0) {
@@ -105,15 +97,6 @@ export default function MyDrivePage() {
           files={files} 
           onFileOpen={handleFileOpen}
         />
-      )}
-
-      {/* Empty State */}
-      {!isLoading && files.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-gray-500 dark:text-gray-400">
-            No files or folders yet. Create a new folder to get started!
-          </p>
-        </div>
       )}
     </div>
   );
