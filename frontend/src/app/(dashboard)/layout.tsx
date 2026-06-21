@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/dashboard/Sidebar';
 import { Topbar } from '@/components/dashboard/Topbar';
 import { Footer } from '@/components/dashboard/Footer';
 import { useUIStore } from '@/lib/store/uiStore';
+import { useAuthStore } from '@/lib/store/authStore';
 import { CreateFolderModal } from '@/components/modals/CreateFolderModal';
 import { RenameModal } from '@/components/modals/RenameModal';
 import { DeleteModal } from '@/components/modals/DeleteModal';
@@ -17,6 +18,11 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const { sidebarOpen, toggleSidebar } = useUIStore();
+  const initialize = useAuthStore((state) => state.initialize);
+
+  useEffect(() => {
+    initialize();
+  }, []);
 
   // Auto-close sidebar on mobile
   useEffect(() => {
