@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { HardDrive } from 'lucide-react';
 import { filesApi } from '@/lib/api/files';
 import { formatFileSize } from '@/lib/utils/formatters';
+import { useFileStore } from '@/lib/store/fileStore';
 import clsx from 'clsx';
 
 interface StorageData {
@@ -14,14 +15,7 @@ interface StorageData {
 export const StorageIndicator: React.FC = () => {
   const [storage, setStorage] = useState<StorageData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    loadStorage();
-    
-    // Refresh storage every 30 seconds
-    const interval = setInterval(loadStorage, 30000);
-    return () => clearInterval(interval);
-  }, []);
+  const { refreshTrigger } = useFileStore();
 
   const loadStorage = async () => {
     try {
@@ -34,23 +28,35 @@ export const StorageIndicator: React.FC = () => {
     }
   };
 
+  // Load on mount and refresh every 30 seconds
+  useEffect(() => {
+    loadStorage();
+    const interval = setInterval(loadStorage, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Refresh immediately when files change (upload/delete)
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      loadStorage();
+    }
+  }, [refreshTrigger]);
+
   if (isLoading) {
     return (
       <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
-              <HardDrive className="w-4 h-4" />
-              <span>Storage</span>
-            </div>
-            <span className="text-gray-500">...</span>
+        <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
+            <HardDrive className="w-4 h-4" />
+            <span>Storage</span>
           </div>
+          <span className="text-gray-500">...</span>
         </div>
       </div>
     );
   }
 
-  const storagePercent = storage 
+  const storagePercent = storage
     ? Math.min(Math.round((storage.used / storage.limit) * 100), 100)
     : 0;
 
@@ -67,7 +73,6 @@ export const StorageIndicator: React.FC = () => {
           </span>
         </div>
 
-        {/* Progress Bar */}
         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
           <div
             className={clsx(
@@ -82,7 +87,6 @@ export const StorageIndicator: React.FC = () => {
           />
         </div>
 
-        {/* Storage Text */}
         <div className="flex items-center justify-between text-xs">
           <span className="text-gray-500 dark:text-gray-400">
             {storage ? formatFileSize(storage.used) : '0 B'} used
@@ -92,11 +96,10 @@ export const StorageIndicator: React.FC = () => {
           </span>
         </div>
 
-        {/* Warning Message */}
         {storagePercent >= 90 && (
           <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
             <p className="text-xs text-red-600 dark:text-red-400">
-               Storage almost full. Consider upgrading your plan.
+              Storage almost full. Consider upgrading your plan.
             </p>
           </div>
         )}

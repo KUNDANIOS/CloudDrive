@@ -1,14 +1,22 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { FileGrid } from '@/components/dashboard/FileGrid';
 import { filesApi } from '@/lib/api/files';
 import { FileItem } from '@/lib/types';
 import { Clock } from 'lucide-react';
+import { useFileStore } from '@/lib/store/fileStore';
 
 export default function RecentPage() {
-  const [files, setFiles] = useState<FileItem[]>([]);
+  const [localFiles, setLocalFiles] = useState<FileItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { searchQuery } = useFileStore();
+
+  const filteredFiles = useMemo(() => {
+    if (!searchQuery.trim()) return localFiles;
+    const q = searchQuery.toLowerCase().trim();
+    return localFiles.filter((f) => f.name.toLowerCase().includes(q));
+  }, [localFiles, searchQuery]);
 
   useEffect(() => {
     loadRecentFiles();
@@ -18,7 +26,7 @@ export default function RecentPage() {
     setIsLoading(true);
     try {
       const data = await filesApi.getRecentFiles();
-      setFiles(data);
+      setLocalFiles(data);
     } catch (error) {
       console.error('Failed to load recent files:', error);
     } finally {
@@ -28,6 +36,31 @@ export default function RecentPage() {
 
   const handleFileOpen = (file: FileItem) => {
     console.log('Open file:', file.id);
+  };
+
+  const handleStar = async (file: FileItem) => {
+    try {
+      await filesApi.toggleStar(file.id);
+      await loadRecentFiles(); // refresh to show updated star
+    } catch (error) {
+      console.error('Failed to toggle star:', error);
+    }
+  };
+
+  const handleDownload = async (file: FileItem) => {
+    try {
+      const blob = await filesApi.downloadFile(file.id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Failed to download:', error);
+    }
   };
 
   return (
@@ -46,7 +79,14 @@ export default function RecentPage() {
         </div>
       </div>
 
-      <FileGrid files={files} isLoading={isLoading} onFileOpen={handleFileOpen} />
+      <FileGrid
+        files={filteredFiles}
+        isLoading={isLoading}
+        onFileOpen={handleFileOpen}
+        onStar={handleStar}
+        onDownload={handleDownload}
+        onOperationSuccess={loadRecentFiles}
+      />
     </div>
   );
 }
