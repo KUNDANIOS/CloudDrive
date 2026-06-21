@@ -4,18 +4,11 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Home,
-  FolderOpen,
-  Users,
-  Clock,
-  Star,
-  Trash2,
-  HardDrive,
-  Plus,
-  X,
+  Home, FolderOpen, Users, Clock, Star, Trash2, HardDrive, Plus, X,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useUIStore } from '@/lib/store/uiStore';
+import { useFileStore } from '@/lib/store/fileStore';
 import { filesApi } from '@/lib/api/files';
 
 const navigation = [
@@ -27,7 +20,6 @@ const navigation = [
   { name: 'Trash', href: '/trash', icon: Trash2 },
 ];
 
-// Format bytes to human readable
 const formatFileSize = (bytes: number | undefined): string => {
   if (!bytes || bytes === 0) return '0 B';
   const k = 1024;
@@ -39,16 +31,9 @@ const formatFileSize = (bytes: number | undefined): string => {
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
   const { sidebarOpen, openModal, toggleSidebar } = useUIStore();
+  const { refreshTrigger } = useFileStore();
   const [storage, setStorage] = useState<{ used: number; limit: number } | null>(null);
   const [isLoadingStorage, setIsLoadingStorage] = useState(true);
-
-  useEffect(() => {
-    loadStorage();
-    
-    // Refresh storage every 30 seconds
-    const interval = setInterval(loadStorage, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
   const loadStorage = async () => {
     try {
@@ -61,9 +46,18 @@ export const Sidebar: React.FC = () => {
     }
   };
 
-  if (!sidebarOpen) return null;
+  useEffect(() => {
+    loadStorage();
+    const interval = setInterval(loadStorage, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
-  const storagePercent = storage 
+  // Refresh storage when files change
+  useEffect(() => {
+    if (refreshTrigger > 0) loadStorage();
+  }, [refreshTrigger]);
+
+  const storagePercent = storage
     ? Math.min(Math.round((storage.used / storage.limit) * 100), 100)
     : 0;
 
@@ -77,16 +71,22 @@ export const Sidebar: React.FC = () => {
     <>
       {/* Mobile Overlay */}
       {sidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
           onClick={toggleSidebar}
         />
       )}
 
-      {/* Sidebar */}
-      <aside className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-screen fixed left-0 top-0 z-50 lg:z-30">
-        {/* Logo with Close Button */}
-        <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200 dark:border-gray-700">
+      {/* Sidebar — always visible on lg+, slide in/out on mobile */}
+      <aside
+        className={clsx(
+          'w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-screen fixed left-0 top-0 z-50 transition-transform duration-300',
+          // On mobile: slide in/out. On desktop: always visible
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        )}
+      >
+        {/* Logo */}
+        <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
           <Link href="/dashboard" className="flex items-center space-x-2">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-lg">C</span>
@@ -95,19 +95,16 @@ export const Sidebar: React.FC = () => {
               CloudDrive
             </span>
           </Link>
-          
-          {/* Close Button - Visible on mobile, hidden on large screens */}
           <button
             onClick={toggleSidebar}
-            className="lg:hidden p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-            aria-label="Close sidebar"
+            className="lg:hidden p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* New Button */}
-        <div className="p-4">
+        <div className="p-4 flex-shrink-0">
           <button
             onClick={() => openModal('createFolder')}
             className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
@@ -125,6 +122,10 @@ export const Sidebar: React.FC = () => {
               <Link
                 key={item.name}
                 href={item.href}
+                onClick={() => {
+                  // Close sidebar on mobile after navigation
+                  if (window.innerWidth < 1024) toggleSidebar();
+                }}
                 className={clsx(
                   'flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors',
                   isActive
@@ -132,15 +133,15 @@ export const Sidebar: React.FC = () => {
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                 )}
               >
-                <item.icon className="w-5 h-5" />
-                <span className="font-medium">{item.name}</span>
+                <item.icon className="w-5 h-5 flex-shrink-0" />
+                <span className="font-medium truncate">{item.name}</span>
               </Link>
             );
           })}
         </nav>
 
         {/* Storage Indicator */}
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+        <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
@@ -153,22 +154,18 @@ export const Sidebar: React.FC = () => {
             </div>
             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
               <div
-                className={clsx(
-                  'h-2 rounded-full transition-all duration-300',
-                  getStorageColor()
-                )}
+                className={clsx('h-2 rounded-full transition-all duration-300', getStorageColor())}
                 style={{ width: `${storagePercent}%` }}
               />
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              {storage 
+              {storage
                 ? `${formatFileSize(storage.used)} of ${formatFileSize(storage.limit)} used`
-                : '0 B of 5 GB used'
-              }
+                : '0 B of 5 GB used'}
             </p>
             {storagePercent >= 90 && (
               <p className="text-xs text-red-600 dark:text-red-400 font-medium">
-                 Storage almost full!
+                Storage almost full!
               </p>
             )}
           </div>
